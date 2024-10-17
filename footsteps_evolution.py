@@ -2183,7 +2183,6 @@ class Population:
                 break
             agent1, agent2, game_type = game_data
             game_number += 1
-            game_number += 1
 
             # Check if both agents are still in the population
             if agent1 not in self.agents or agent2 not in self.agents:
@@ -2211,13 +2210,6 @@ class Population:
             # Play the game
             game = Game(agent1, agent2, visualize=visualize_game)
             winner = game.play()
-
-            # Update fitness based on game outcome
-            fitness_change_agent1 = game.get_fitness_change(agent1)
-            agent1.fitness += fitness_change_agent1
-
-            fitness_change_agent2 = game.get_fitness_change(agent2)
-            agent2.fitness += fitness_change_agent2
 
             # Increment game counters
             agent1.games_played_this_generation += 1
