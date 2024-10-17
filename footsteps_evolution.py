@@ -1166,10 +1166,6 @@ class Game:
                 f"{self.loser.id}: "
                 f"{fitness_change_loser}"
             )
-            logging.info(
-                f"{self.winner.id} new fitness: {self.winner.fitness}"
-            )
-            logging.info(f"{self.loser.id} new fitness: {self.loser.fitness}")
 
             # **Update Fitness Tracking Attributes**
             self.winner.sum_fitness_change += fitness_change_winner
@@ -1185,8 +1181,34 @@ class Game:
                 f" (Pop {self.winner.population_id}) won against "
                 f"{self.loser.id} (Pop {self.loser.population_id})"
             )
-            logging.info(f"{self.winner.id} fitness: {self.winner.fitness}")
-            logging.info(f"{self.loser.id} fitness: {self.loser.fitness}")
+            logging.info(
+                f"{self.winner.id} new fitness: {self.winner.fitness}"
+            )
+            logging.info(f"{self.loser.id} new fitness: {self.loser.fitness}")
+
+            # Estimate fitness changes for the winner
+            min_est_winner, mean_est_winner, max_est_winner = (
+                self.winner.estimate_fitness_change()
+            )
+            logging.info(
+                f"Estimated Fitness Change for {self.winner.id} "
+                f"(Pop {self.winner.population_id}): "
+                f"Min: {min_est_winner:.2f}, "
+                f"Mean: {mean_est_winner:.2f}, "
+                f"Max: {max_est_winner:.2f}"
+            )
+
+            # Estimate fitness changes for the loser
+            # min_est_loser, mean_est_loser, max_est_loser = (
+            # self.loser.estimate_fitness_change()
+            # )
+            # logging.info(
+            #    f"Estimated Fitness Change for {self.loser.id} "
+            #    f"(Pop {self.loser.population_id}): "
+            #    f"Min: {min_est_loser:.2f}, "
+            #    f"Mean: {mean_est_loser:.2f}, "
+            #    f"Max: {max_est_loser:.2f}"
+            # )
 
     def record_final_state(self, turn):
         if self.visualize:
@@ -2140,7 +2162,7 @@ class Population:
             agent.reset_generation_counter()
 
         # Determine required number of games
-        required_games_per_agent = 12  # Adjust as needed
+        required_games_per_agent = 24  # Adjust as needed
         total_games_needed = (
             self.size * required_games_per_agent
         ) // 2  # Each game involves two agents
@@ -2236,17 +2258,8 @@ class Population:
                         exc_info=True,
                     )
 
-            # Log game results
-            logging.info(
-                f"Regular Game {game_number}: {agent1.id} "
-                f"(Pop {agent1.population_id}) vs {agent2.id} "
-                f"(Pop {agent2.population_id})"
-            )
-            logging.info(f" - {agent1.id} fitness: {agent1.fitness}")
-            logging.info(f" - {agent2.id} fitness: {agent2.fitness}")
-
             # Identify least fit agent
-            least_fit_agent = min([agent1, agent2], key=lambda a: a.fitness)
+            least_fit_agent = self.get_least_fit_agent()
             logging.info(
                 f"Least Fit Agent after Game {game_number}: "
                 f"{least_fit_agent.id}, from Population "
@@ -2255,7 +2268,7 @@ class Population:
             )
 
             # Identify most fit agent
-            most_fit_agent = max([agent1, agent2], key=lambda a: a.fitness)
+            most_fit_agent = self.get_most_fit_agent()
             logging.info(
                 f"Most Fit Agent after Game {game_number}: "
                 f"{most_fit_agent.id}, from Population "
@@ -2508,54 +2521,74 @@ class Population:
                 f"with Fitness: {most_fit_agent.fitness}"
             )
 
-        # 1. The Oldest Remaining Agent (Lowest ID Number)
-        oldest_agent = min(self.agents, key=lambda a: int(a.id.split("-")[1]))
-        oldest_agent_info = "Oldest Remaining Agent in Population "
-        f"{oldest_agent.population_id}: {oldest_agent.id} "
-        f"(Fitness: {oldest_agent.fitness})"
-        print(oldest_agent_info)
-        logging.info(oldest_agent_info)
 
-        # 2. The Most Experienced Agent (Greatest Number of Games Played)
-        most_experienced_agent = max(self.agents, key=lambda a: a.game_counter)
-        most_experienced_info = "Most Experienced Agent in Population "
-        f"{most_experienced_agent.population_id}: {most_experienced_agent.id} "
+def report_population_status(self, game_number=None):
+    # ...
+
+    # 1. The Oldest Remaining Agent
+    oldest_agent = min(self.agents, key=lambda a: int(a.id.split("-")[1]))
+    oldest_agent_info = (
+        f"Oldest Remaining Agent in Population {self.population_id}: "
+        f"{oldest_agent.id} (Fitness: {oldest_agent.fitness})"
+    )
+    print(oldest_agent_info)
+    logging.info(oldest_agent_info)
+
+    # 2. The Most Experienced Agent
+    most_experienced_agent = max(self.agents, key=lambda a: a.game_counter)
+    most_experienced_info = (
+        f"Most Experienced Agent in Population {self.population_id}: "
+        f"{most_experienced_agent.id} "
         f"(Games Played: {most_experienced_agent.game_counter}) "
         f"(Fitness: {most_experienced_agent.fitness})"
-        print(most_experienced_info)
-        logging.info(most_experienced_info)
+    )
+    print(most_experienced_info)
+    logging.info(most_experienced_info)
 
-        # 3. The Most Prolific Agent (Greatest Number of Living Offspring)
-        # Calculate offspring counts
-        offspring_counts = {agent.id: 0 for agent in self.agents}
-        for agent in self.agents:
-            for ancestor_id in agent.genealogy:
-                if ancestor_id in offspring_counts:
-                    offspring_counts[ancestor_id] += 1
+    # 3. The Most Prolific Agent
+    # Calculate offspring counts
+    offspring_counts = {}
+    for agent in self.agents:
+        for ancestor_id in agent.genealogy:
+            if ancestor_id != agent.id:
+                offspring_counts[ancestor_id] = (
+                    offspring_counts.get(ancestor_id, 0) + 1
+                )
 
-        # 4. Identify the most prolific agent
+    # Identify the most prolific agent
+    if offspring_counts:
         most_prolific_agent_id = max(
-            offspring_counts, key=lambda k: offspring_counts[k]
+            offspring_counts, key=offspring_counts.get
         )
         most_prolific_count = offspring_counts[most_prolific_agent_id]
+        # Find the agent object
         most_prolific_agent = next(
-            agent
-            for agent in self.agents
-            if agent.id == most_prolific_agent_id
+            (a for a in self.all_agents if a.id == most_prolific_agent_id),
+            None,
         )
-        most_prolific_info = "Most Prolific Agent in Population "
-        f"{most_prolific_agent.population_id}: {most_prolific_agent.id} "
-        f"(Living Offspring: {most_prolific_count}) "
-        f"(Fitness: {most_prolific_agent.fitness})"
-        print(most_prolific_info)
-        logging.info(most_prolific_info)
+        if most_prolific_agent:
+            most_prolific_info = (
+                f"Most Prolific Agent in Population {self.population_id}: "
+                f"{most_prolific_agent.id} "
+                f"(Living Offspring: {most_prolific_count}) "
+                f"(Fitness: {most_prolific_agent.fitness})"
+            )
+            print(most_prolific_info)
+            logging.info(most_prolific_info)
+        else:
+            print("Most Prolific Agent not found.")
+            logging.info("Most Prolific Agent not found.")
+    else:
+        print("No Prolific Agents found.")
+        logging.info("No Prolific Agents found.")
 
         # 5. Seminal Agents
         seminal_agents = self.get_seminal_agents()
         if seminal_agents:
             print("Seminal Agents:")
             logging.info(
-                f"Seminal Agents in Population {oldest_agent.population_id}:"
+                "Seminal Agents in Population "
+                f"{oldest_agent.population_id}:"
             )
             for agent_id, count in seminal_agents:
                 agent_info = f" - {agent_id} (Living Offspring: {count})"
