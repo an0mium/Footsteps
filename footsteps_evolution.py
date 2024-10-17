@@ -21,7 +21,7 @@ logger.setLevel(logging.INFO)  # Set the desired logging level
 # Create a RotatingFileHandler
 handler = RotatingFileHandler(
     "game_simulation.log",
-    maxBytes=50 * 1024 * 1024,  # 50 MB per log file
+    maxBytes=500 * 1024 * 1024,  # 500 MB per log file
     backupCount=50,  # Keep up to 50 backup files
     delay=True,  # Delays file creation until the first log message
 )
@@ -2291,8 +2291,8 @@ class Population:
                             agent_to_remove=least_fit_agent,
                             winner=winner,
                             meta_population=meta_population,
-                            other_population=self.get_population_of_agent(
-                                winner
+                            other_population=(
+                                meta_population.get_population_of_agent(winner)
                             ),
                         )
                     else:
