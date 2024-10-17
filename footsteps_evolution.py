@@ -2178,7 +2178,11 @@ class Population:
         game_number = 0  # Initialize game counter
 
         while self.game_scheduler.scheduled_games:
-            agent1, agent2 = self.game_scheduler.get_next_game()
+            game_data = self.game_scheduler.get_next_game()
+            if not game_data:
+                break
+            agent1, agent2, game_type = game_data
+            game_number += 1
             game_number += 1
 
             # Check if both agents are still in the population
