@@ -1,19 +1,13 @@
 {
     "python.terminal.activateEnvironment": false,
-    "python.analysis.autoFormatStrings": true,
     "python.analysis.autoImportCompletions": true,
     "python.analysis.completeFunctionParens": true,
-    "python.formatting.provider": "black",
-    "python.formatting.blackArgs": ["--line-length", "79"],
     "editor.formatOnSave": true,
-    "python.sortImports.path": "isort",
-    "python.sortImports.args": ["--profile", "black"],
     "editor.codeActionsOnSave": {
         "source.organizeImports": "explicit"
     },
-    "python.linting.flake8Enabled": true,
-    "python.linting.enabled": true,
-    "python.linting.pylintEnabled": true,
-    "python.linting.pylintArgs": ["--max-line-length=100"],
     "editor.defaultFormatter": "ms-python.black-formatter"
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true
 }

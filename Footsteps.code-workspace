@@ -4,5 +4,6 @@
 			"path": "."
 		}
 	],
+	"terminal.integrated.shell.osx": "/bin/zsh"
 	"settings": {}
 }

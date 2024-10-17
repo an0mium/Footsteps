@@ -4,20 +4,19 @@
         {
             "label": "Autoflake",
             "type": "shell",
-            "command": "/Users/armand/Projects/Footsteps/venv/bin/python",
+            "command": "/Users/armand/Projects/Footsteps/",
             "args": [
                 "-m",
                 "autoflake",
                 "--in-place",
                 "--remove-unused-variables",
                 "--remove-all-unused-imports",
-                "--recursive",
                 "."
             ],
             "options": {
                 "cwd": "${workspaceFolder}",
                 "env": {
-                    "PATH": "/Users/armand/Projects/Footsteps/venv/bin:${env:PATH}"
+                    "PATH": "/Users/armand/Projects/Footsteps/:${env:PATH}"
                 }
             },
             "presentation": {
