@@ -2469,60 +2469,6 @@ class Population:
 
         return seminal_agents
 
-    """
-    def report_population_status(self, game_number=None):
-        """ """
-        Gathers and prints/logs information about the current agent population:
-        - Oldest remaining agent
-        - Most experienced agent
-        - Most prolific agent
-        - Seminal agents
-        - Average fitness
-        - Diversity
-        - Logs changes in most fit and least fit agents when unique and changed
-        """ """
-        if not self.agents:
-            print("No agents remaining in the population.")
-            logging.info("No agents remaining in the population.")
-            print("---=-=---")
-            logging.info("---=-=---")
-            return
-
-        # 0. The Least and Most Fit Remaining Agents
-
-        # Identify least fit agent
-        least_fit_agent = self.get_least_fit_agent()
-        if game_number is not None:
-            print(
-                f"Least Fit Agent after Game {game_number}: "
-                f"{least_fit_agent.id}, from Population "
-                f"{least_fit_agent.population_id}, with Fitness: "
-                f"{least_fit_agent.fitness}"
-            )
-        else:
-            print(
-                f"Least Fit Agent: {least_fit_agent.id}, "
-                f"from Population {least_fit_agent.population_id}, "
-                f"with Fitness: {least_fit_agent.fitness}"
-            )
-
-        # Identify most fit agent
-        most_fit_agent = self.get_most_fit_agent()
-        if game_number is not None:
-            print(
-                f"Most Fit Agent after Game {game_number}: "
-                f"{most_fit_agent.id}, from Population "
-                f"{most_fit_agent.population_id}, with Fitness: "
-                f"{most_fit_agent.fitness}"
-            )
-        else:
-            print(
-                f"Most Fit Agent: {most_fit_agent.id}, "
-                f"from Population {most_fit_agent.population_id}, "
-                f"with Fitness: {most_fit_agent.fitness}"
-            )
-    """
-
     def report_population_status(self, game_number=None):
         # ...
 
@@ -2547,7 +2493,7 @@ class Population:
         logging.info(most_experienced_info)
 
         # 3. The Most Prolific Agent
-        # Calculate offspring counts
+        # Calculate offspring counts among living agents
         offspring_counts = {}
         for agent in self.agents:
             for ancestor_id in agent.genealogy:
@@ -2556,15 +2502,15 @@ class Population:
                         offspring_counts.get(ancestor_id, 0) + 1
                     )
 
-        # Identify the most prolific agent
+        # Identify the most prolific agent among living agents
         if offspring_counts:
             most_prolific_agent_id = max(
                 offspring_counts, key=offspring_counts.get
             )
             most_prolific_count = offspring_counts[most_prolific_agent_id]
-            # Find the agent object
+            # Find the agent object among living agents
             most_prolific_agent = next(
-                (a for a in self.all_agents if a.id == most_prolific_agent_id),
+                (a for a in self.agents if a.id == most_prolific_agent_id),
                 None,
             )
             if most_prolific_agent:
@@ -2577,123 +2523,127 @@ class Population:
                 print(most_prolific_info)
                 logging.info(most_prolific_info)
             else:
-                print("Most Prolific Agent not found.")
-                logging.info("Most Prolific Agent not found.")
+                # The most prolific agent is not among the living agents
+                print(
+                    f"Most Prolific Agent {most_prolific_agent_id}"
+                    "is no longer alive."
+                )
+                logging.info(
+                    f"Most Prolific Agent {most_prolific_agent_id}"
+                    "is no longer alive."
+                )
         else:
             print("No Prolific Agents found.")
             logging.info("No Prolific Agents found.")
 
-            # 5. Seminal Agents
-            seminal_agents = self.get_seminal_agents()
-            if seminal_agents:
-                print("Seminal Agents:")
-                logging.info(
-                    "Seminal Agents in Population "
-                    f"{oldest_agent.population_id}:"
-                )
-                for agent_id, count in seminal_agents:
-                    agent_info = f" - {agent_id} (Living Offspring: {count})"
-                    print(agent_info)
-                    logging.info(agent_info)
-            else:
-                print("No Seminal Agents Found.")
-                logging.info("No Seminal Agents Found.")
-
-            # 6. Average Population Fitness
-            avg_fitness = self.calculate_average_fitness()
-            avg_fitness_info = "Average Fitness in Population "
-            f"{self.population_id}: {avg_fitness:.2f}"
-
-            print(avg_fitness_info)
-            logging.info(avg_fitness_info)
-
-            # 7. Diversity
-            diversity = self.calculate_diversity()
-            diversity_info = (
-                f"Diversity in Population {self.population_id}:"
-                f"{diversity:.4f}"
+        # 5. Seminal Agents
+        seminal_agents = self.get_seminal_agents()
+        if seminal_agents:
+            print("Seminal Agents:")
+            logging.info(
+                "Seminal Agents in Population "
+                f"{oldest_agent.population_id}:"
             )
-            print(diversity_info)
-            logging.info(diversity_info)
+            for agent_id, count in seminal_agents:
+                agent_info = f" - {agent_id} (Living Offspring: {count})"
+                print(agent_info)
+                logging.info(agent_info)
+        else:
+            print("No Seminal Agents Found.")
+            logging.info("No Seminal Agents Found.")
 
-            # **Selective Logging for Most Fit Agent**
-            # **8. Estimated Fitness Change Parameters**
-            unique_most_fit_agent = self.get_unique_most_fit_agent()
-            if unique_most_fit_agent:
-                if unique_most_fit_agent != self.previous_most_fit_agent:
-                    # Ensure uniqueness
-                    is_unique = (
-                        len(
-                            [
-                                agent
-                                for agent in self.agents
-                                if agent.fitness
-                                == unique_most_fit_agent.fitness
-                            ]
-                        )
-                        == 1
+        # 6. Average Population Fitness
+        avg_fitness = self.calculate_average_fitness()
+        avg_fitness_info = "Average Fitness in Population "
+        f"{self.population_id}: {avg_fitness:.2f}"
+
+        print(avg_fitness_info)
+        logging.info(avg_fitness_info)
+
+        # 7. Diversity
+        diversity = self.calculate_diversity()
+        diversity_info = (
+            f"Diversity in Population {self.population_id}:" f"{diversity:.4f}"
+        )
+        print(diversity_info)
+        logging.info(diversity_info)
+
+        # 8. Estimated Fitness Change Parameters
+        # **Selective Logging for Most Fit Agent**
+        unique_most_fit_agent = self.get_unique_most_fit_agent()
+        if unique_most_fit_agent:
+            if unique_most_fit_agent != self.previous_most_fit_agent:
+                # Ensure uniqueness
+                is_unique = (
+                    len(
+                        [
+                            agent
+                            for agent in self.agents
+                            if agent.fitness == unique_most_fit_agent.fitness
+                        ]
                     )
-                    if is_unique:
-                        logging.info(
-                            "Most Fit Agent Changed: "
-                            f"{unique_most_fit_agent.id} "
-                            f"with Fitness {unique_most_fit_agent.fitness}"
-                        )
-                        print(
-                            f"Most Fit Agent Changed: "
-                            f"{unique_most_fit_agent.id} "
-                            f"with Fitness {unique_most_fit_agent.fitness}"
-                        )
-                        self.previous_most_fit_agent = unique_most_fit_agent
-                print(
-                    "\n--- Most Fit Agent Estimated "
-                    "Fitness Change Per Game ---"
+                    == 1
                 )
-                logging.info(
-                    "--- Most Fit Agent Estimated Fitness Change Per Game ---"
-                )
-                min_est, mean_est, max_est = (
-                    unique_most_fit_agent.estimate_fitness_change()
-                )
-                agent_est_info = (
-                    f"Agent {unique_most_fit_agent.id} "
-                    f"(Population {agent.population_id}):\n"
-                    f" - Estimated Min Change: {min_est:.2f}\n"
-                    f" - Estimated Mean Change: {mean_est:.2f}\n"
-                    f" - Estimated Max Change: {max_est:.2f}"
-                )
-                print(agent_est_info)
-                logging.info(agent_est_info)
-            else:
-                if self.previous_most_fit_agent is not None:
-                    # if len(self.agents) > 5:
-                    #    print(f"...and {len(self.agents) - 5} more agents.")
-                    #    logging.info(f"... and ""
-                    #    f"{len(self.agents) - 5} more agents.")
-                    logging.info("No unique most fit agent currently.")
-                    print("No unique most fit agent currently.")
-                    self.previous_most_fit_agent = None
-
-            # **Selective Logging for Least Fit Agent**
-            unique_least_fit_agent = self.get_unique_least_fit_agent()
-            if unique_least_fit_agent:
-                if unique_least_fit_agent != self.previous_least_fit_agent:
+                if is_unique:
                     logging.info(
-                        "Least Fit Agent Changed: "
-                        f"{unique_least_fit_agent.id} "
-                        f"with Fitness {unique_least_fit_agent.fitness}"
+                        "Most Fit Agent Changed: "
+                        f"{unique_most_fit_agent.id} "
+                        f"with Fitness {unique_most_fit_agent.fitness}"
                     )
                     print(
-                        f"Least Fit Agent Changed: "
-                        f"{unique_least_fit_agent.id} "
-                        f"with Fitness {unique_least_fit_agent.fitness}"
+                        f"Most Fit Agent Changed: "
+                        f"{unique_most_fit_agent.id} "
+                        f"with Fitness {unique_most_fit_agent.fitness}"
                     )
-                    self.previous_least_fit_agent = unique_least_fit_agent
-            else:
-                if self.previous_least_fit_agent is not None:
-                    logging.info("No unique least fit agent currently.")
-                    print("No unique least fit agent currently.")
-                    self.previous_least_fit_agent = None
+                    self.previous_most_fit_agent = unique_most_fit_agent
+            print(
+                "\n--- Most Fit Agent Estimated " "Fitness Change Per Game ---"
+            )
+            logging.info(
+                "--- Most Fit Agent Estimated Fitness Change Per Game ---"
+            )
+            min_est, mean_est, max_est = (
+                unique_most_fit_agent.estimate_fitness_change()
+            )
+            agent_est_info = (
+                f"Agent {unique_most_fit_agent.id} "
+                f"(Population {agent.population_id}):\n"
+                f" - Estimated Min Change: {min_est:.2f}\n"
+                f" - Estimated Mean Change: {mean_est:.2f}\n"
+                f" - Estimated Max Change: {max_est:.2f}"
+            )
+            print(agent_est_info)
+            logging.info(agent_est_info)
+        else:
+            if self.previous_most_fit_agent is not None:
+                # if len(self.agents) > 5:
+                #    print(f"...and {len(self.agents) - 5} more agents.")
+                #    logging.info(f"... and ""
+                #    f"{len(self.agents) - 5} more agents.")
+                logging.info("No unique most fit agent currently.")
+                print("No unique most fit agent currently.")
+                self.previous_most_fit_agent = None
+
+        # **Selective Logging for Least Fit Agent**
+        unique_least_fit_agent = self.get_unique_least_fit_agent()
+        if unique_least_fit_agent:
+            if unique_least_fit_agent != self.previous_least_fit_agent:
+                logging.info(
+                    "Least Fit Agent Changed: "
+                    f"{unique_least_fit_agent.id} "
+                    f"with Fitness {unique_least_fit_agent.fitness}"
+                )
+                print(
+                    f"Least Fit Agent Changed: "
+                    f"{unique_least_fit_agent.id} "
+                    f"with Fitness {unique_least_fit_agent.fitness}"
+                )
+                self.previous_least_fit_agent = unique_least_fit_agent
+        else:
+            if self.previous_least_fit_agent is not None:
+                logging.info("No unique least fit agent currently.")
+                print("No unique least fit agent currently.")
+                self.previous_least_fit_agent = None
 
     def visualize_game_change(self, previous_agent, new_agent):
         """
@@ -3283,6 +3233,7 @@ class MetaPopulation:
             print("No agents found in the MetaPopulation.")
             logging.info("No agents found in the MetaPopulation.")
 
+        # Log overall least fit agent
         if overall_least_fit_agent:
             print(
                 f"Overall Least Fit Agent: {overall_least_fit_agent.id} from "
