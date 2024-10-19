@@ -3,7 +3,10 @@ import logging
 import math
 import pstats
 import random
+import sys
 import textwrap
+import threading
+import time
 import unittest
 from copy import deepcopy
 from logging.handlers import RotatingFileHandler
@@ -196,6 +199,30 @@ def format_bid_range(bid_range):
 
 
 plt.ion()  # Turn on interactive mode
+
+
+class KeyListener(threading.Thread):
+    def __init__(self):
+        super().__init__()
+        self.daemon = True  # Daemonize thread to exit when main program exits
+        self.report_requested = False
+        self.stop_flag = False
+        self.lock = threading.Lock()
+
+    def run(self):
+        while not self.stop_flag:
+            if self.is_data():
+                ch = sys.stdin.read(1)
+                if ch == " ":
+                    with self.lock:
+                        self.report_requested = True
+                    print("\nReport Requested. Press any key to continue...")
+            time.sleep(0.1)  # Slight delay to prevent high CPU usage
+
+    def is_data(self):
+        import select
+
+        return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
 
 
 # 1. Define the Strategy Class
@@ -2544,8 +2571,6 @@ class Population:
         logging.info(most_experienced_info)
 
         # 3. The Most Prolific Agent
-        # Identify the living agent with the highest number
-        # of living immediate offspring
         most_prolific_agent = max(
             self.agents, key=lambda a: a.offspring_count, default=None
         )
@@ -2578,8 +2603,8 @@ class Population:
         # 5. Average Population Fitness
         avg_fitness = self.calculate_average_fitness()
         avg_fitness_info = (
-            f"Average Fitness in Population {self.population_id}:"
-            f" {avg_fitness:.2f}"
+            "Average Fitness in Population "
+            f"{self.population_id}: {avg_fitness:.2f}"
         )
         print(avg_fitness_info)
         logging.info(avg_fitness_info)
@@ -2596,11 +2621,15 @@ class Population:
         unique_most_fit_agent = self.get_unique_most_fit_agent()
         if unique_most_fit_agent:
             if unique_most_fit_agent != self.previous_most_fit_agent:
+                previous_agent_id = (
+                    self.previous_most_fit_agent.id
+                    if self.previous_most_fit_agent is not None
+                    else "None"
+                )
                 change_info = (
-                    f"Most fit agent in Population {self.population_id}"
+                    f"Most fit agent in Population {self.population_id} "
                     "changed from "
-                    f"{self.previous_most_fit_agent.id} "
-                    f"to {unique_most_fit_agent.id}, "
+                    f"{previous_agent_id} to {unique_most_fit_agent.id}, "
                     f"with fitness {unique_most_fit_agent.fitness}."
                 )
                 print(change_info)
@@ -2610,8 +2639,8 @@ class Population:
             reproduction_agent = self.get_most_fit_agent()
             if reproduction_agent:
                 change_info = (
-                    f"Most fit agent in Population {self.population_id} "
-                    "is now "
+                    f"Most fit agent in Population {self.population_id}"
+                    " is now "
                     f"{reproduction_agent.id}, with fitness "
                     f"{reproduction_agent.fitness}."
                 )
@@ -2627,12 +2656,16 @@ class Population:
         unique_least_fit_agent = self.get_unique_least_fit_agent()
         if unique_least_fit_agent:
             if unique_least_fit_agent != self.previous_least_fit_agent:
+                previous_agent_id = (
+                    self.previous_least_fit_agent.id
+                    if self.previous_least_fit_agent is not None
+                    else "None"
+                )
                 change_info = (
-                    f"Least fit agent in Population {self.population_id} "
-                    "changed from "
-                    f"{self.previous_least_fit_agent.id} "
-                    f"to {unique_least_fit_agent.id}, with fitness "
-                    f"{unique_least_fit_agent.fitness}."
+                    f"Least fit agent in Population {self.population_id}"
+                    " changed from "
+                    f"{previous_agent_id} to {unique_least_fit_agent.id}, "
+                    f"with fitness {unique_least_fit_agent.fitness}."
                 )
                 print(change_info)
                 logging.info(change_info)
@@ -3642,8 +3675,45 @@ def main():
         meta_population = MetaPopulation(
             num_populations=12, population_size=5040
         )
+
+        # Initialize and start the key listener
+        key_listener = KeyListener()
+        key_listener.start()
+
         # Evolve meta-population
-        meta_population.evolve(generations=120)
+        for generation in range(120):
+            print(f"\n--- Meta Generation {generation + 1} ---")
+            logging.info(
+                f"MetaPopulation - Starting Meta Generation {generation + 1}."
+            )
+            meta_population.evolve(
+                generations=1
+            )  # Evolve one generation at a time
+
+            # Check if a report has been requested
+            with key_listener.lock:
+                if key_listener.report_requested:
+                    # Perform metapopulation report
+                    meta_population.report_metapopulation_status()
+
+                    # Wait for any key press to resume
+                    print("Execution paused. Press any key to continue...")
+                    logging.info("Execution paused for manual report.")
+
+                    # Wait for the user to press any key
+                    while True:
+                        if key_listener.is_data():
+                            ch = sys.stdin.read(1)
+                            if ch:
+                                print("Resuming execution...\n")
+                                logging.info(
+                                    "Resuming execution after report."
+                                )
+                                break
+                        time.sleep(0.1)  # Prevent busy waiting
+
+        # Stop the key listener thread
+        key_listener.stop_flag = True
 
         # View evolution of strategies (printing the first agent's strategy
         # from the first population)
@@ -3675,7 +3745,7 @@ def main():
         else:
             print("Agent wins!")
 
-        # Visualize the game with initial fitness values
+        # Visualize the game with initial fitness
         try:
             game.visualize_game(
                 human, agent, initial_fitness_human, initial_fitness_agent
