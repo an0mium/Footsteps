@@ -614,7 +614,11 @@ class Player:
 # 2. Define the Agent Class
 #
 class Agent(Player):
-    def __init__(self, strategy=None, genealogy=None, population_id=1):
+    _id_counter = 1  # Class variable for unique ID generation
+
+    def __init__(
+        self, strategy=None, genealogy=None, population_id=1, parents=None
+    ):
         super().__init__(player_type="A")
         self.population_id = population_id
         if strategy is None:
@@ -640,11 +644,9 @@ class Agent(Player):
         self.sum_fitness_change = 0  # Sum of fitness changes
         self.sum_fitness_change_squared = 0  # Sum of squared fitness changes
 
-    def reset_generation_counter(self):
-        """
-        Resets the per-generation game counter.
-        """
-        self.games_played_this_generation = 0
+        # **New Attributes for Prolific Agent Tracking**
+        self.parents = parents if parents else []  # List of parent agent IDs
+        self.offspring_count = 0  # Number of living immediate offspring
 
     def asexual_offspring(self):
         """
@@ -660,8 +662,34 @@ class Agent(Player):
             strategy=offspring_strategy,
             genealogy=self.genealogy,
             population_id=self.population_id,
+            parents=[self.id],  # Set parent to self for asexual reproduction
         )
+        self.offspring_count += 1  # Increment offspring count
         return offspring
+
+    def sexual_offspring(self, other_agent):
+        """
+        Produces a sexual offspring by crossing over with another agent.
+        """
+        # Perform crossover to create a new strategy
+        child_strategy = self.strategy.crossover(other_agent.strategy)
+        child_strategy.mutate(mutation_rate=0.05)
+        # Combine genealogies
+        child_genealogy = self.genealogy.union(other_agent.genealogy)
+        # Create a new Agent with the combined genealogy and parent IDs
+        child = Agent(
+            strategy=child_strategy,
+            genealogy=child_genealogy,
+            population_id=self.population_id,
+            parents=[
+                self.id,
+                other_agent.id,
+            ],  # Set parents for sexual reproduction
+        )
+        # Increment offspring counts for both parents
+        self.offspring_count += 1
+        other_agent.offspring_count += 1
+        return child
 
     def increment_game_counter(self):
         """
@@ -1194,8 +1222,7 @@ class Game:
                 f"Estimated Fitness Change for {self.winner.id} "
                 f"(Pop {self.winner.population_id}): "
                 f"Min: {min_est_winner:.2f}, "
-                f"Mean: {mean_est_winner:.2f}, "
-                f"Max: {max_est_winner:.2f}"
+                f"Mean: {mean_est_winner:.2f}"
             )
 
             # Estimate fitness changes for the loser
@@ -1785,14 +1812,34 @@ class Population:
         if agent in self.agents:
             self.agents.remove(agent)
             print(
-                f"Removed Agent {agent.id} - from Population "
-                f"{self.population_id} - with fitness {agent.fitness}"
+                f"Removed Agent {agent.id} from Population "
+                f"{self.population_id} with fitness {agent.fitness}"
             )
             logging.info(
-                f"Removed Agent {agent.id} - from Population "
-                f"{self.population_id} - with fitness {agent.fitness}"
+                f"Removed Agent {agent.id} from Population "
+                f"{self.population_id} with fitness {agent.fitness}"
             )
             self.game_scheduler.remove_agent_games(agent)
+
+            # Decrement offspring_count for parents
+            for parent_id in agent.parents:
+                parent_agent = next(
+                    (a for a in self.agents if a.id == parent_id), None
+                )
+                if parent_agent:
+                    parent_agent.offspring_count = max(
+                        parent_agent.offspring_count - 1, 0
+                    )
+                    logging.info(
+                        "Decremented offspring_count for "
+                        f"Parent Agent {parent_agent.id} "
+                        f"to {parent_agent.offspring_count}"
+                    )
+                    print(
+                        "Decremented offspring_count for "
+                        f"Parent Agent {parent_agent.id} "
+                        f"to {parent_agent.offspring_count}"
+                    )
         else:
             print(
                 f"Attempted to remove Agent {agent.id} from Population "
@@ -1963,7 +2010,7 @@ class Population:
         if other_population:
             other_population.game_scheduler.remove_agent_games(agent_to_remove)
         logging.info(
-            "Removed scheduled games involving " f"Agent {agent_to_remove.id}"
+            f"Removed scheduled games involving Agent {agent_to_remove.id}"
         )
 
         # Check for unique most fit agent and reproduce accordingly
@@ -1982,10 +2029,10 @@ class Population:
             # Ensure correct population_id
             self.add_agent(new_offspring)
             logging.info(
-                "Asexual Reproduction: Added Offspring Agent "
-                f"{new_offspring.id} "
-                f"to Population {self.population_id} derived "
-                f"from {unique_most_fit_agent.id}"
+                "Asexual Reproduction: Added Offspring"
+                f"Agent {new_offspring.id} "
+                f"to Population {self.population_id}"
+                f"derived from {unique_most_fit_agent.id}"
             )
             # Optionally adjust fitness if needed
             unique_most_fit_agent.fitness = (
@@ -1999,34 +2046,25 @@ class Population:
                 fittest_current = self.get_most_fit_agent()
                 fittest_other = other_population.get_most_fit_agent()
                 if fittest_current and fittest_other:
-                    child_strategy = fittest_current.strategy.crossover(
-                        fittest_other.strategy
-                    )
-                    child_strategy.mutate(mutation_rate=self.mutation_rate)
-                    child_genealogy = fittest_current.genealogy.union(
-                        fittest_other.genealogy
-                    )
-                    child = Agent(
-                        strategy=child_strategy,
-                        genealogy=child_genealogy,
-                        population_id=self.population_id,
-                    )
+                    child = fittest_current.sexual_offspring(fittest_other)
                     self.add_agent(child)
                     logging.info(
-                        f"Interpopulation Reproduction: Added Offspring Agent "
-                        f"{child.id} to Population {self.population_id} "
-                        f"via Sexual Reproduction between {fittest_current.id}"
-                        f" with fitness {fittest_current.fitness} and "
-                        f"{fittest_other.id} with "
-                        f"fitness {fittest_other.fitness}."
+                        "Interpopulation Reproduction: "
+                        "Added Offspring Agent "
+                        f"{child.id} to Population "
+                        f"{self.population_id} "
+                        "via Sexual Reproduction "
+                        f"between {fittest_current.id} "
+                        f"and {fittest_other.id}."
                     )
                     print(
-                        f"Interpopulation Reproduction: Added Offspring Agent "
-                        f"{child.id} to Population {self.population_id} "
-                        f"via Sexual Reproduction between {fittest_current.id}"
-                        f" with fitness {fittest_current.fitness} and "
-                        f"{fittest_other.id} with "
-                        f"fitness {fittest_other.fitness}."
+                        "Interpopulation Reproduction: "
+                        "Added Offspring Agent "
+                        f"{child.id} to Population "
+                        f"{self.population_id} "
+                        "via Sexual Reproduction "
+                        f"between {fittest_current.id} "
+                        f"and {fittest_other.id}."
                     )
                 else:
                     # Fallback to asexual reproduction
@@ -2035,11 +2073,12 @@ class Population:
                         new_offspring = reproduction_agent.asexual_offspring()
                         self.add_agent(new_offspring)
                         logging.info(
-                            f"Fallback Asexual Reproduction: Added Offspring "
-                            f"Agent {new_offspring.id} "
-                            f"of {reproduction_agent.id} "
-                            f"with fitness {reproduction_agent.fitness} to "
-                            f"Population {self.population_id}."
+                            "Fallback Asexual Reproduction: "
+                            "Added Offspring "
+                            f"Agent {new_offspring.id} of "
+                            f"{reproduction_agent.id} "
+                            f"with fitness {reproduction_agent.fitness} "
+                            f"to Population {self.population_id}."
                         )
                         print(
                             f"Added Offspring Agent {new_offspring.id} of "
@@ -2060,8 +2099,8 @@ class Population:
                         self.add_agent(new_offspring)
                         logging.info(
                             f"Fallback Asexual Reproduction: Added Offspring "
-                            f"Agent {new_offspring.id} "
-                            f"of {reproduction_agent.id} "
+                            f"Agent {new_offspring.id} of "
+                            f"{reproduction_agent.id} "
                             f"with fitness {reproduction_agent.fitness} "
                             f"to Population {self.population_id}."
                         )
@@ -2074,30 +2113,19 @@ class Population:
                 else:
                     # Sexual reproduction within population
                     parent1, parent2 = fittest_agents
-                    child_strategy = parent1.strategy.crossover(
-                        parent2.strategy
-                    )
-                    child_strategy.mutate(mutation_rate=self.mutation_rate)
-                    child_genealogy = parent1.genealogy.union(
-                        parent2.genealogy
-                    )
-                    child = Agent(
-                        strategy=child_strategy,
-                        genealogy=child_genealogy,
-                        population_id=self.population_id,
-                    )
+                    child = parent1.sexual_offspring(parent2)
                     self.add_agent(child)
                     logging.info(
                         f"Added Offspring Agent {child.id} to Population "
-                        f"{self.population_id} via Sexual Reproduction between"
-                        f" {parent1.id} with fitness {parent1.fitness} and "
-                        f"{parent2.id} with fitness {parent2.fitness}."
+                        f"{self.population_id} via Sexual Reproduction "
+                        "between "
+                        f"{parent1.id} and {parent2.id}."
                     )
                     print(
                         f"Added Offspring Agent {child.id} to Population "
-                        f"{self.population_id} via Sexual Reproduction between"
-                        f" {parent1.id} with fitness {parent1.fitness} and "
-                        f"{parent2.id} with fitness {parent2.fitness}."
+                        f"{self.population_id} via Sexual Reproduction "
+                        "between "
+                        f"{parent1.id} and {parent2.id}."
                     )
 
                     # Adjust fitness of reproduction agents
@@ -2470,7 +2498,12 @@ class Population:
         return seminal_agents
 
     def report_population_status(self, game_number=None):
-        # ...
+        if not self.agents:
+            print("No agents remaining in the population.")
+            logging.info("No agents remaining in the population.")
+            print("---=-=---")
+            logging.info("---=-=---")
+            return
 
         # 1. The Oldest Remaining Agent
         oldest_agent = min(self.agents, key=lambda a: int(a.id.split("-")[1]))
@@ -2493,57 +2526,29 @@ class Population:
         logging.info(most_experienced_info)
 
         # 3. The Most Prolific Agent
-        # Calculate offspring counts among living agents
-        offspring_counts = {}
-        for agent in self.agents:
-            for ancestor_id in agent.genealogy:
-                if ancestor_id != agent.id:
-                    offspring_counts[ancestor_id] = (
-                        offspring_counts.get(ancestor_id, 0) + 1
-                    )
-
-        # Identify the most prolific agent among living agents
-        if offspring_counts:
-            most_prolific_agent_id = max(
-                offspring_counts, key=offspring_counts.get
+        # Identify the living agent with the highest number
+        # of living immediate offspring
+        most_prolific_agent = max(
+            self.agents, key=lambda a: a.offspring_count, default=None
+        )
+        if most_prolific_agent and most_prolific_agent.offspring_count > 0:
+            most_prolific_info = (
+                f"Most Prolific Agent in Population {self.population_id}: "
+                f"{most_prolific_agent.id} "
+                f"(Living Offspring: {most_prolific_agent.offspring_count}) "
+                f"(Fitness: {most_prolific_agent.fitness})"
             )
-            most_prolific_count = offspring_counts[most_prolific_agent_id]
-            # Find the agent object among living agents
-            most_prolific_agent = next(
-                (a for a in self.agents if a.id == most_prolific_agent_id),
-                None,
-            )
-            if most_prolific_agent:
-                most_prolific_info = (
-                    f"Most Prolific Agent in Population {self.population_id}: "
-                    f"{most_prolific_agent.id} "
-                    f"(Living Offspring: {most_prolific_count}) "
-                    f"(Fitness: {most_prolific_agent.fitness})"
-                )
-                print(most_prolific_info)
-                logging.info(most_prolific_info)
-            else:
-                # The most prolific agent is not among the living agents
-                print(
-                    f"Most Prolific Agent {most_prolific_agent_id}"
-                    "is no longer alive."
-                )
-                logging.info(
-                    f"Most Prolific Agent {most_prolific_agent_id}"
-                    "is no longer alive."
-                )
+            print(most_prolific_info)
+            logging.info(most_prolific_info)
         else:
             print("No Prolific Agents found.")
             logging.info("No Prolific Agents found.")
 
-        # 5. Seminal Agents
+        # 4. Seminal Agents
         seminal_agents = self.get_seminal_agents()
         if seminal_agents:
             print("Seminal Agents:")
-            logging.info(
-                "Seminal Agents in Population "
-                f"{oldest_agent.population_id}:"
-            )
+            logging.info(f"Seminal Agents in Population {self.population_id}:")
             for agent_id, count in seminal_agents:
                 agent_info = f" - {agent_id} (Living Offspring: {count})"
                 print(agent_info)
@@ -2552,98 +2557,77 @@ class Population:
             print("No Seminal Agents Found.")
             logging.info("No Seminal Agents Found.")
 
-        # 6. Average Population Fitness
+        # 5. Average Population Fitness
         avg_fitness = self.calculate_average_fitness()
-        avg_fitness_info = "Average Fitness in Population "
-        f"{self.population_id}: {avg_fitness:.2f}"
-
+        avg_fitness_info = (
+            f"Average Fitness in Population {self.population_id}:"
+            f" {avg_fitness:.2f}"
+        )
         print(avg_fitness_info)
         logging.info(avg_fitness_info)
 
-        # 7. Diversity
+        # 6. Diversity
         diversity = self.calculate_diversity()
         diversity_info = (
-            f"Diversity in Population {self.population_id}:" f"{diversity:.4f}"
+            f"Diversity in Population {self.population_id}: {diversity:.4f}"
         )
         print(diversity_info)
         logging.info(diversity_info)
 
-        # 8. Estimated Fitness Change Parameters
-        # **Selective Logging for Most Fit Agent**
+        # 7. Most Fit Agent Change Logging
         unique_most_fit_agent = self.get_unique_most_fit_agent()
         if unique_most_fit_agent:
             if unique_most_fit_agent != self.previous_most_fit_agent:
-                # Ensure uniqueness
-                is_unique = (
-                    len(
-                        [
-                            agent
-                            for agent in self.agents
-                            if agent.fitness == unique_most_fit_agent.fitness
-                        ]
-                    )
-                    == 1
+                change_info = (
+                    f"Most fit agent in Population {self.population_id}"
+                    "changed from "
+                    f"{self.previous_most_fit_agent.id} "
+                    f"to {unique_most_fit_agent.id}, "
+                    f"with fitness {unique_most_fit_agent.fitness}."
                 )
-                if is_unique:
-                    logging.info(
-                        "Most Fit Agent Changed: "
-                        f"{unique_most_fit_agent.id} "
-                        f"with Fitness {unique_most_fit_agent.fitness}"
-                    )
-                    print(
-                        f"Most Fit Agent Changed: "
-                        f"{unique_most_fit_agent.id} "
-                        f"with Fitness {unique_most_fit_agent.fitness}"
-                    )
-                    self.previous_most_fit_agent = unique_most_fit_agent
-            print(
-                "\n--- Most Fit Agent Estimated " "Fitness Change Per Game ---"
-            )
-            logging.info(
-                "--- Most Fit Agent Estimated Fitness Change Per Game ---"
-            )
-            min_est, mean_est, max_est = (
-                unique_most_fit_agent.estimate_fitness_change()
-            )
-            agent_est_info = (
-                f"Agent {unique_most_fit_agent.id} "
-                f"(Population {agent.population_id}):\n"
-                f" - Estimated Min Change: {min_est:.2f}\n"
-                f" - Estimated Mean Change: {mean_est:.2f}\n"
-                f" - Estimated Max Change: {max_est:.2f}"
-            )
-            print(agent_est_info)
-            logging.info(agent_est_info)
+                print(change_info)
+                logging.info(change_info)
+                self.previous_most_fit_agent = unique_most_fit_agent
         else:
-            if self.previous_most_fit_agent is not None:
-                # if len(self.agents) > 5:
-                #    print(f"...and {len(self.agents) - 5} more agents.")
-                #    logging.info(f"... and ""
-                #    f"{len(self.agents) - 5} more agents.")
-                logging.info("No unique most fit agent currently.")
+            reproduction_agent = self.get_most_fit_agent()
+            if reproduction_agent:
+                change_info = (
+                    f"Most fit agent in Population {self.population_id} "
+                    "is now "
+                    f"{reproduction_agent.id}, with fitness "
+                    f"{reproduction_agent.fitness}."
+                )
+                print(change_info)
+                logging.info(change_info)
+                self.previous_most_fit_agent = reproduction_agent
+            else:
                 print("No unique most fit agent currently.")
+                logging.info("No unique most fit agent currently.")
                 self.previous_most_fit_agent = None
 
-        # **Selective Logging for Least Fit Agent**
+        # 8. Least Fit Agent Change Logging
         unique_least_fit_agent = self.get_unique_least_fit_agent()
         if unique_least_fit_agent:
             if unique_least_fit_agent != self.previous_least_fit_agent:
-                logging.info(
-                    "Least Fit Agent Changed: "
-                    f"{unique_least_fit_agent.id} "
-                    f"with Fitness {unique_least_fit_agent.fitness}"
+                change_info = (
+                    f"Least fit agent in Population {self.population_id} "
+                    "changed from "
+                    f"{self.previous_least_fit_agent.id} "
+                    f"to {unique_least_fit_agent.id}, with fitness "
+                    f"{unique_least_fit_agent.fitness}."
                 )
-                print(
-                    f"Least Fit Agent Changed: "
-                    f"{unique_least_fit_agent.id} "
-                    f"with Fitness {unique_least_fit_agent.fitness}"
-                )
+                print(change_info)
+                logging.info(change_info)
                 self.previous_least_fit_agent = unique_least_fit_agent
         else:
             if self.previous_least_fit_agent is not None:
-                logging.info("No unique least fit agent currently.")
-                print("No unique least fit agent currently.")
+                change_info = "No unique least fit agent currently."
+                print(change_info)
+                logging.info(change_info)
                 self.previous_least_fit_agent = None
+
+        print("\n--- Population Status Report Complete ---")
+        logging.info("\n--- Population Status Report Complete ---\n")
 
     def visualize_game_change(self, previous_agent, new_agent):
         """
