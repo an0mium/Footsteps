@@ -705,6 +705,24 @@ class Agent(Player):
             f"game_counter incremented to {self.game_counter}"
         )
 
+    def reset_generation_counter(self):
+        """
+        Resets the per-generation game counters
+        and fitness tracking attributes.
+        """
+        self.games_played_this_generation = 0
+        self.sum_fitness_change = 0
+        self.sum_fitness_change_squared = 0
+        # If there are other per-generation attributes, reset them here
+        print(
+            f"Agent {self.id} from Population {self.population_id} "
+            "generation counters reset."
+        )
+        logging.info(
+            f"Agent {self.id} from Population {self.population_id} "
+            "generation counters reset."
+        )
+
     def get_bid(self, point_budget, opponent_point_budget):
         game_state = {
             "my_points": point_budget,
