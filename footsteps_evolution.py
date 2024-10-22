@@ -21,6 +21,9 @@ import numpy as np
 
 if platform.system() == "Windows":
     import msvcrt
+else:
+    import termios
+    import tty
 
 matplotlib.use("TkAgg")  # Use 'TkAgg' backend
 
@@ -195,26 +198,47 @@ plt.ion()  # Turn on interactive mode
 
 
 class KeyListener(threading.Thread):
-    def __init__(self, report_event):
+    def __init__(self, report_event, continue_event):
         super().__init__()
         self.daemon = True  # Daemonize thread to exit when main program exits
         self.report_event = report_event
+        self.continue_event = continue_event
         self.stop_flag = False
         self.lock = threading.Lock()
         self.platform = platform.system()
 
+        if self.platform != "Windows":
+            # Save the terminal settings
+            self.fd = sys.stdin.fileno()
+            self.old_settings = termios.tcgetattr(self.fd)
+            # Set terminal to cbreak mode
+            tty.setcbreak(self.fd)
+
     def run(self):
-        while not self.stop_flag:
-            if self.is_data():
-                ch = self.read_char()
-                if ch == " ":
-                    # Signal that a report is requested
-                    self.report_event.set()
-                    print(
-                        "\nReport Requested. A report will be generated "
-                        "after the current game completes."
-                    )
-            time.sleep(0.1)  # Slight delay to prevent high CPU usage
+        try:
+            while not self.stop_flag:
+                if self.is_data():
+                    ch = self.read_char()
+                    if ch:
+                        if not self.report_event.is_set():
+                            # First keypress: Trigger report
+                            self.report_event.set()
+                            print("\nReport Requested. Generating report...")
+                            logging.info(
+                                "Report Requested. Generating report..."
+                            )
+                        else:
+                            # Second keypress: Continue execution
+                            self.continue_event.set()
+                            print("\nContinuing execution...")
+                            logging.info("Continuing execution...")
+                time.sleep(0.1)  # Slight delay to prevent high CPU usage
+        finally:
+            if self.platform != "Windows":
+                # Restore the terminal settings
+                termios.tcsetattr(
+                    self.fd, termios.TCSADRAIN, self.old_settings
+                )
 
     def is_data(self):
         if self.platform == "Windows":
@@ -301,7 +325,7 @@ class Strategy:
                 self.bid_params[param][index] += change
                 # Clamp the values between 0.01 and 0.5
                 self.bid_params[param][index] = min(
-                    max(self.bid_params[param][index], 0.01), 0.5
+                    max(self.bid_params[param][index], 0.001), 0.5
                 )
                 # Sort the bid ranges
                 self.bid_params[param] = sorted(self.bid_params[param])
@@ -318,7 +342,7 @@ class Strategy:
             )
 
     def generate_random_bid_params(self):
-        thresholds = sorted(random.sample(range(-5000, 5000), 2))
+        thresholds = sorted(random.sample(range(-50000, 50000), 2))
         low_bid_range = sorted(
             [random.uniform(0.001, 0.05), random.uniform(0.01, 0.1)]
         )
@@ -2289,7 +2313,9 @@ class Population:
                     f"{elite_agent.id} vs {opponent.id}"
                 )
 
-    def evaluate_fitness(self, meta_population=None, report_event=None):
+    def evaluate_fitness(
+        self, meta_population=None, report_event=None, continue_event=None
+    ):
         print("\n--- Evaluating Fitness for Current Generation ---")
 
         # Reset per-generation game counters
@@ -2446,14 +2472,22 @@ class Population:
                         "not found in any population."
                     )
 
-            # **Check for Report Request After Each Game**
-            if report_event and report_event.is_set():
-                print("\n--- Generating Metapopulation Report ---")
-                logging.info("--- Generating Metapopulation Report ---")
-                meta_population.report_metapopulation_status()
-                print("--- Report Generated ---\n")
-                logging.info("--- Report Generated ---\n")
-                report_event.clear()  # Reset the event
+                # **Check for Report Request After Each Game**
+                if report_event and report_event.is_set():
+                    print("\n--- Generating Metapopulation Report ---")
+                    logging.info("--- Generating Metapopulation Report ---")
+                    meta_population.report_metapopulation_status()
+                    print("--- Report Generated ---\n")
+                    logging.info("--- Report Generated ---\n")
+
+                    # Pause for 2 seconds
+                    time.sleep(2)
+
+                    # Await continue_event
+                    print("Press any key to continue...")
+                    logging.info("Awaiting user input to continue.")
+                    continue_event.wait()
+                    continue_event.clear()
 
         self.report_population_status()
 
@@ -2572,14 +2606,22 @@ class Population:
                         "not found in any population."
                     )
 
-            # **Check for Report Request After Each Game**
-            if report_event and report_event.is_set():
-                print("\n--- Generating Metapopulation Report ---")
-                logging.info("--- Generating Metapopulation Report ---")
-                meta_population.report_metapopulation_status()
-                print("--- Report Generated ---\n")
-                logging.info("--- Report Generated ---\n")
-                report_event.clear()  # Reset the event
+                # **Check for Report Request After Each Game**
+                if report_event and report_event.is_set():
+                    print("\n--- Generating Metapopulation Report ---")
+                    logging.info("--- Generating Metapopulation Report ---")
+                    meta_population.report_metapopulation_status()
+                    print("--- Report Generated ---\n")
+                    logging.info("--- Report Generated ---\n")
+
+                    # Pause for 2 seconds
+                    time.sleep(2)
+
+                    # Await continue_event
+                    print("Press any key to continue...")
+                    logging.info("Awaiting user input to continue.")
+                    continue_event.wait()
+                    continue_event.clear()
 
         self.report_population_status()
 
@@ -3013,7 +3055,7 @@ class MetaPopulation:
                 "MetaPopulation - No unique least fit agent at initialization."
             )
 
-    def evolve(self, generations=100, report_event=None):
+    def evolve(self, generations=100, report_event=None, continue_event=None):
         for generation in range(generations):
             print(f"\n--- Meta Generation {generation + 1} ---")
             logging.info(
@@ -3024,7 +3066,9 @@ class MetaPopulation:
             for population in self.populations:
                 print(f"\nEvolving Population {population.population_id}")
                 population.evaluate_fitness(
-                    meta_population=self, report_event=report_event
+                    meta_population=self,
+                    report_event=report_event,
+                    continue_event=continue_event,
                 )
                 population.generate_next_generation()
                 # Report population status after generation
@@ -3854,11 +3898,12 @@ def main():
             num_populations=12, population_size=5040
         )
 
-        # Initialize the report_event
+        # Initialize the report_event and continue_event
         report_event = threading.Event()
+        continue_event = threading.Event()
 
         # Initialize and start the key listener
-        key_listener = KeyListener(report_event)
+        key_listener = KeyListener(report_event, continue_event)
         key_listener.start()
 
         # Evolve meta-population
@@ -3868,7 +3913,9 @@ def main():
                 f"MetaPopulation - Starting Meta Generation {generation + 1}."
             )
             meta_population.evolve(
-                generations=1, report_event=report_event
+                generations=1,
+                report_event=report_event,
+                continue_event=continue_event,
             )  # Evolve one generation at a time
 
             # The report will be handled within Population.evaluate_fitness()
