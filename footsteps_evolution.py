@@ -1764,7 +1764,7 @@ class Population:
         self.agents = []
         self.all_agents = []
         self.elite_percentage = (
-            0.002  # 0.2% elite agents for intrapopulation matches
+            0.02  # 2% elite agents for intrapopulation matches
         )
 
         for _ in range(size):
@@ -1917,7 +1917,7 @@ class Population:
 
         if current_avg > previous_avg * 1.05:
             # Rapid improvement, reduce elite percentage to maintain diversity
-            self.elite_percentage = max(self.elite_percentage * 0.95, 0.2)
+            self.elite_percentage = max(self.elite_percentage * 0.95, 0.002)
             logging.info(
                 f"Population {self.population_id}: Decreasing elite_percentage"
                 f" to {self.elite_percentage:.2f}"
@@ -2212,7 +2212,7 @@ class Population:
     def conduct_intrapopulation_elite_matches(self):
         """
         Conducts intrapopulation elite matches
-        where the top 0.2% agents by fitness
+        where the top agents by fitness
         play against all other agents in the same population.
         """
         """
@@ -2224,7 +2224,7 @@ class Population:
         Each elite agent plays against all non-elite agents.
         """
 
-        elite_percentage = 0.002  # 0.2%
+        elite_percentage = 0.02  # 2%
         num_elite = max(
             2, int(self.size * elite_percentage)
         )  # Ensure at least 2 elite agents
@@ -2429,6 +2429,120 @@ class Population:
 
         # Schedule intrapopulation elite matches
         self.conduct_intrapopulation_elite_matches()
+
+        while self.game_scheduler.scheduled_games:
+            game_data = self.game_scheduler.get_next_game()
+            if not game_data:
+                break
+            agent1, agent2, game_type = game_data
+            game_number += 1
+
+            # Check if both agents are still in the population
+            if agent1 not in self.agents or agent2 not in self.agents:
+                logging.warning(
+                    f"Skipping Game {game_number}: "
+                    f"One or both agents ({agent1.id}, "
+                    f"{agent2.id}) have been removed."
+                )
+                continue  # Skip this game
+
+            # Determine if this game should be visualized (optional)
+            visualize_game = False
+            sample_probability = 0.0005  # 0.05%
+            if random.random() < sample_probability:
+                visualize_game = True
+                logging.info(
+                    f"Visualizing sampled Game {game_number} "
+                    f"between {agent1.id} and {agent2.id}"
+                )
+
+            # Store initial fitness before the game
+            initial_fitness_agent1 = agent1.fitness
+            initial_fitness_agent2 = agent2.fitness
+
+            # Play the game
+            game = Game(agent1, agent2, visualize=visualize_game)
+            winner = game.play()
+
+            # Increment game counters
+            agent1.games_played_this_generation += 1
+            agent2.games_played_this_generation += 1
+
+            # Handle visualization
+            if visualize_game:
+                try:
+                    game.visualize_game(
+                        agent1,
+                        agent2,
+                        initial_fitness_agent1,
+                        initial_fitness_agent2,
+                    )
+                    logging.info(
+                        f"Visualized Game {game_number} between "
+                        f"{agent1.id} and {agent2.id}"
+                    )
+                except Exception as e:
+                    logging.error(
+                        "An exception occurred during visualization"
+                        f"of Game {game_number} between {agent1.id} "
+                        f"and {agent2.id}: {e}",
+                        exc_info=True,
+                    )
+
+            # Identify least fit agent
+            least_fit_agent = self.get_least_fit_agent()
+            logging.info(
+                f"Least Fit Agent after Game {game_number}: "
+                f"{least_fit_agent.id}, from Population "
+                f"{least_fit_agent.population_id}, "
+                f"Fitness: {least_fit_agent.fitness}"
+            )
+
+            # Identify most fit agent
+            most_fit_agent = self.get_most_fit_agent()
+            logging.info(
+                f"Most Fit Agent after Game {game_number}: "
+                f"{most_fit_agent.id}, from Population "
+                f"{most_fit_agent.population_id}, "
+                f"Fitness: {most_fit_agent.fitness}"
+            )
+
+            # Handle Agent Removal and Replacement
+            if least_fit_agent.fitness < 0:
+                agent_population = meta_population.get_population_of_agent(
+                    least_fit_agent
+                )
+                if agent_population:
+                    # Determine if the game was interpopulation
+                    is_inter_population = (
+                        agent1.population_id != agent2.population_id
+                    )
+                    if is_inter_population and winner:
+                        agent_population.remove_and_replace_agent(
+                            agent_to_remove=least_fit_agent,
+                            winner=winner,
+                            meta_population=meta_population,
+                            other_population=(
+                                meta_population.get_population_of_agent(winner)
+                            ),
+                        )
+                    else:
+                        # Intrapopulation replacement
+                        agent_population.remove_and_replace_agent(
+                            agent_to_remove=least_fit_agent
+                        )
+                    logging.info(
+                        f"Agent {least_fit_agent.id} from "
+                        f"Population {least_fit_agent.population_id}"
+                        "removed and replaced."
+                    )
+                else:
+                    logging.warning(
+                        f"Agent {least_fit_agent.id} "
+                        "not found in any population."
+                    )
+
+        self.report_population_status()
 
         print("\n--- Fitness Evaluation Complete ---\n")
 
@@ -3346,7 +3460,7 @@ class MetaPopulation:
         try:
             print("\n--- Conducting Cross-Population Reproduction ---")
             logging.info("\n--- Conducting Cross-Population Reproduction ---")
-            elite_percentage = 0.01
+            elite_percentage = 0.02
             # Define elite percentage for cross-population reproduction
 
             # Collect elite agents from each population
@@ -3583,7 +3697,7 @@ class MetaPopulation:
 
     def conduct_elite_matches(self):
         """
-        Conducts interpopulation elite matches where the top 0.1% agents
+        Conducts interpopulation elite matches where the top % agents
         by fitness
         across the metapopulation play against all other agents
         in the metapopulation.
@@ -3592,7 +3706,7 @@ class MetaPopulation:
         logging.info(
             "\n--- Conducting Elite Matches Between Populations ---\n"
         )
-        elite_percentage = 0.001  # 0.1%
+        elite_percentage = 0.02  # 2%
         total_agents = self.num_populations * self.population_size
         num_elite = max(
             2, int(total_agents * elite_percentage)
