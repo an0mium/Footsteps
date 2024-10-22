@@ -2623,11 +2623,17 @@ class Population:
                     # Pause for 2 seconds
                     time.sleep(2)
 
+                    # **Clear the report_event to prevent repeated triggering**
+                    report_event.clear()  # Reset the event
+
                     # Await continue_event
-                    print("Press any key to continue...")
-                    logging.info("Awaiting user input to continue.")
-                    continue_event.wait()
-                    continue_event.clear()
+                    # If you wish to pause execution
+                    # until the user presses another key,
+                    # uncomment the following lines:
+                    # print("Press any key to continue...")
+                    # logging.info("Awaiting user input to continue.")
+                    # continue_event.wait()
+                    # continue_event.clear()
 
         self.report_population_status()
 
