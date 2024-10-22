@@ -1,6 +1,9 @@
 import cProfile
 import logging
 import math
+
+# Platform-specific imports
+import platform
 import pstats
 import random
 import select
@@ -15,6 +18,9 @@ from textwrap import wrap as wrap_text
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+
+if platform.system() == "Windows":
+    import msvcrt
 
 matplotlib.use("TkAgg")  # Use 'TkAgg' backend
 
@@ -193,28 +199,38 @@ class KeyListener(threading.Thread):
         super().__init__()
         self.daemon = True  # Daemonize thread to exit when main program exits
         self.report_event = report_event
-        self.report_requested = False
         self.stop_flag = False
         self.lock = threading.Lock()
+        self.platform = platform.system()
 
     def run(self):
         while not self.stop_flag:
             if self.is_data():
-                ch = sys.stdin.read(1)
+                ch = self.read_char()
                 if ch == " ":
-                    with self.lock:
-                        self.report_requested = True
-                        # Signal that a report is requested
-                        self.report_event.set()
+                    # Signal that a report is requested
+                    self.report_event.set()
                     print(
                         "\nReport Requested. A report will be generated "
                         "after the current game completes."
                     )
-                    print("\nPress any key to continue...")
             time.sleep(0.1)  # Slight delay to prevent high CPU usage
 
     def is_data(self):
-        return select.select([sys.stdin], [], [], 0) == ([sys.stdin], [], [])
+        if self.platform == "Windows":
+            return msvcrt.kbhit()
+        else:
+            return select.select([sys.stdin], [], [], 0) == (
+                [sys.stdin],
+                [],
+                [],
+            )
+
+    def read_char(self):
+        if self.platform == "Windows":
+            return msvcrt.getch().decode("utf-8")
+        else:
+            return sys.stdin.read(1)
 
 
 # 1. Define the Strategy Class
@@ -1300,7 +1316,9 @@ class Game:
         strategy_str = traverse(strategy.decision_tree)
         # Wrap the strategy string to 100 characters per line
         wrapped_strategy = wrap_text(strategy_str, width=100)
-        return wrapped_strategy
+        return "\n".join(
+            wrapped_strategy
+        )  # Join the list into a single string
 
     def format_bid_params(self, bid_params):
         """
@@ -1406,8 +1424,12 @@ class Game:
             # Generate wrapped genealogy strings
             genealogy_p1 = ", ".join(map(str, sorted(player1.genealogy)))
             genealogy_p2 = ", ".join(map(str, sorted(player2.genealogy)))
-            wrapped_genealogy_p1 = wrap_text(genealogy_p1, width=100)
-            wrapped_genealogy_p2 = wrap_text(genealogy_p2, width=100)
+            wrapped_genealogy_p1 = "\n".join(
+                wrap_text(genealogy_p1, width=100)
+            )
+            wrapped_genealogy_p2 = "\n".join(
+                wrap_text(genealogy_p2, width=100)
+            )
 
             # Generate strategy strings
             strategy_p1 = self.get_strategy_string(player1.strategy)
@@ -1426,8 +1448,10 @@ class Game:
             bid_info_p2 = self.format_bid_params(bid_params_p2)  # Updated call
 
             # Print Agent 1 Information Text
-            agent1_text = f"Player 1, {player1.id}\nPoints: {points_p1}\n"
-            "Games Played: {player1.game_counter}"
+            agent1_text = (
+                f"Player 1, {player1.id}\nPoints: {points_p1}\n"
+                f"Games Played: {player1.game_counter}"
+            )
             ax.text(
                 -10,
                 9.0,
@@ -1462,8 +1486,10 @@ class Game:
             )
 
             # Print Agent 2 Information Text
-            agent2_text = f"Player 2, {player2.id}\nPoints: {points_p2}\n"
-            "Games Played: {player2.game_counter}"
+            agent2_text = (
+                f"Player 2, {player2.id}\nPoints: {points_p2}\n"
+                f"Games Played: {player2.game_counter}"
+            )
             ax.text(
                 self.board_size + 9,
                 self.board_size + 1.0,
@@ -1507,7 +1533,6 @@ class Game:
             # plt.close(fig)
             # Remove plt.close(fig) to keep the plot open
             # Optionally, add a condition to close or manage the plot
-
         # plt.pause(2)
 
         # Re-plot the last state
@@ -1521,8 +1546,12 @@ class Game:
             # Generate wrapped genealogy strings
             genealogy_p1 = ", ".join(map(str, sorted(player1.genealogy)))
             genealogy_p2 = ", ".join(map(str, sorted(player2.genealogy)))
-            wrapped_genealogy_p1 = wrap_text(genealogy_p1, width=100)
-            wrapped_genealogy_p2 = wrap_text(genealogy_p2, width=100)
+            wrapped_genealogy_p1 = "\n".join(
+                wrap_text(genealogy_p1, width=100)
+            )
+            wrapped_genealogy_p2 = "\n".join(
+                wrap_text(genealogy_p2, width=100)
+            )
 
             # Generate strategy strings
             strategy_p1 = self.get_strategy_string(player1.strategy)
@@ -3847,6 +3876,9 @@ def main():
         # Stop the key listener thread
         key_listener.stop_flag = True
 
+        # Optional: Wait for the KeyListener thread to finish
+        key_listener.join()
+
         # View evolution of strategies (printing the first agent's strategy
         # from the first population)
         print("\nEvolved Strategy of First Agent from Population 1:")
@@ -3854,43 +3886,7 @@ def main():
             meta_population.populations[0].agents[0].strategy.decision_tree
         )
 
-        # Optionally, play a game between a human and an agent
-        # from any population
-        human = HumanPlayer()
-        agent = random.choice(
-            random.choice(meta_population.populations).agents
-        )
-        game = Game(human, agent, visualize=True)
-
-        # Store initial fitness (assuming human fitness is 500)
-        initial_fitness_human = getattr(human, "fitness", 500)
-        initial_fitness_agent = agent.fitness
-
-        winner = game.play()
-
-        # Update fitness using Game's method
-        fitness_change_agent = game.get_fitness_change(agent)
-        agent.fitness += fitness_change_agent
-
-        if winner == human:
-            print("You win!")
-        else:
-            print("Agent wins!")
-
-        # Visualize the game with initial fitness
-        try:
-            game.visualize_game(
-                human, agent, initial_fitness_human, initial_fitness_agent
-            )
-        except Exception as e:
-            print(
-                "An exception occurred during human vs "
-                f"agent game visualization: {e}"
-            )
-            logging.error(
-                f"Human vs Agent Game Visualization error between {human.id} "
-                f"and {agent.id}: {e}"
-            )
+        # ... [Rest of your main function] ...
 
     except AttributeError as e:
         print(f"AttributeError encountered: {e}")
