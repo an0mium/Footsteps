@@ -745,7 +745,7 @@ class Agent(Player):
             f"Agent {self.id} from Population {self.population_id} "
             "generation counters reset."
         )
-        logging.info(
+        logging.debug(
             f"Agent {self.id} from Population {self.population_id} "
             "generation counters reset."
         )
@@ -1742,6 +1742,21 @@ class GameScheduler:
 # 5a. Define the Population Class
 #
 class Population:
+    """
+    Represents a population of agents within a specific population ID.
+
+    Attributes:
+        size (int): The maximum number of agents in the population.
+        population_id (int): Unique identifier for the population.
+        meta_population (MetaPopulation): Reference to the overarching
+        MetaPopulation. agents (list): Current agents in the population.
+        all_agents (list): All agents that have ever been in the population.
+        elite_percentage (float): Percentage of top agents considered elite.
+        game_scheduler (GameScheduler): Scheduler for managing games within
+        the population.
+        ...
+    """
+
     def __init__(self, size=2880, population_id=1, meta_population=None):
         self.size = size
         self.population_id = population_id
@@ -1761,22 +1776,11 @@ class Population:
             GameScheduler()
         )  # Initialize GameScheduler for the population
 
-        # Initialize current and previous most fit agent
-        self.current_most_fit_agent = self.get_unique_most_fit_agent()
-        self.previous_most_fit_agent = None  # Historical value initialization
+        # Initialize previous most fit agent
+        self.previous_most_fit_agent = self.get_unique_most_fit_agent()
 
-        # Initialize current and previous least fit agent
-        self.current_least_fit_agent = self.get_unique_least_fit_agent()
-        self.previous_least_fit_agent = None  # Historical value initialization
-
-        if self.current_most_fit_agent:
-            logging.info(
-                f"Initial most fit agent: {self.current_most_fit_agent.id} "
-                f"from Population {self.current_most_fit_agent.population_id} "
-                f"with fitness {self.current_most_fit_agent.fitness}"
-            )
-        else:
-            logging.info("No unique most fit agent at initialization.")
+        # Initialize previous least fit agent
+        self.previous_least_fit_agent = self.get_unique_least_fit_agent()
 
         # Mutation rate parameters
         self.base_mutation_rate = 0.05
@@ -2049,13 +2053,17 @@ class Population:
 
         # Remove the agent using the centralized method
         self.remove_agent(agent_to_remove)
+        logging.info(
+            f"Removed Agent {agent_to_remove.id}"
+            f"from Population {self.population_id}."
+        )
 
         # Remove any scheduled games involving this agent
         self.game_scheduler.remove_agent_games(agent_to_remove)
         if other_population:
             other_population.game_scheduler.remove_agent_games(agent_to_remove)
         logging.info(
-            f"Removed scheduled games involving Agent {agent_to_remove.id}"
+            f"Removed scheduled games involving Agent {agent_to_remove.id}."
         )
 
         # Check for unique most fit agent and reproduce accordingly
@@ -2066,22 +2074,29 @@ class Population:
             winner_population = meta_population.populations[
                 winner.population_id - 1
             ]
+            logging.debug(
+                "Replacement will be derived from "
+                f"winner's population: {winner_population.population_id}"
+            )
 
         if unique_most_fit_agent:
             # Asexual reproduction
             new_offspring = unique_most_fit_agent.asexual_offspring()
             new_offspring.population_id = self.population_id
-            # Ensure correct population_id
             self.add_agent(new_offspring)
             logging.info(
-                "Asexual Reproduction: Added Offspring"
+                "Asexual Reproduction: Added Offspring "
                 f"Agent {new_offspring.id} "
-                f"to Population {self.population_id}"
-                f"derived from {unique_most_fit_agent.id}"
+                f"to Population {self.population_id} "
+                f"derived from {unique_most_fit_agent.id}."
             )
             # Optionally adjust fitness if needed
             unique_most_fit_agent.fitness = (
                 unique_most_fit_agent.fitness * 99 // 100
+            )
+            logging.debug(
+                f"Adjusted Fitness of {unique_most_fit_agent.id}"
+                f"to {unique_most_fit_agent.fitness}."
             )
             return new_offspring
         else:
@@ -2095,21 +2110,16 @@ class Population:
                     self.add_agent(child)
                     logging.info(
                         "Interpopulation Reproduction: "
-                        "Added Offspring Agent "
-                        f"{child.id} to Population "
-                        f"{self.population_id} "
-                        "via Sexual Reproduction "
-                        f"between {fittest_current.id} "
-                        f"and {fittest_other.id}."
+                        f"Added Offspring Agent {child.id} "
+                        f"to Population {self.population_id} "
+                        f"via Sexual Reproduction between "
+                        f"{fittest_current.id} and {fittest_other.id}."
                     )
                     print(
                         "Interpopulation Reproduction: "
-                        "Added Offspring Agent "
-                        f"{child.id} to Population "
-                        f"{self.population_id} "
-                        "via Sexual Reproduction "
-                        f"between {fittest_current.id} "
-                        f"and {fittest_other.id}."
+                        f"Added Offspring Agent {child.id} to Population "
+                        f"{self.population_id} via Sexual Reproduction "
+                        f"between {fittest_current.id} and {fittest_other.id}."
                     )
                 else:
                     # Fallback to asexual reproduction
@@ -2118,8 +2128,7 @@ class Population:
                         new_offspring = reproduction_agent.asexual_offspring()
                         self.add_agent(new_offspring)
                         logging.info(
-                            "Fallback Asexual Reproduction: "
-                            "Added Offspring "
+                            "Fallback Asexual Reproduction: Added Offspring "
                             f"Agent {new_offspring.id} of "
                             f"{reproduction_agent.id} "
                             f"with fitness {reproduction_agent.fitness} "
@@ -2143,9 +2152,9 @@ class Population:
                         new_offspring = reproduction_agent.asexual_offspring()
                         self.add_agent(new_offspring)
                         logging.info(
-                            f"Fallback Asexual Reproduction: Added Offspring "
-                            f"Agent {new_offspring.id} of "
-                            f"{reproduction_agent.id} "
+                            "Fallback Asexual Reproduction: Added Offspring "
+                            f"Agent {new_offspring.id} "
+                            f"of {reproduction_agent.id} "
                             f"with fitness {reproduction_agent.fitness} "
                             f"to Population {self.population_id}."
                         )
@@ -2163,19 +2172,27 @@ class Population:
                     logging.info(
                         f"Added Offspring Agent {child.id} to Population "
                         f"{self.population_id} via Sexual Reproduction "
-                        "between "
-                        f"{parent1.id} and {parent2.id}."
+                        f"between {parent1.id} and {parent2.id}."
                     )
                     print(
                         f"Added Offspring Agent {child.id} to Population "
                         f"{self.population_id} via Sexual Reproduction "
-                        "between "
-                        f"{parent1.id} and {parent2.id}."
+                        f"between {parent1.id} and {parent2.id}."
                     )
 
                     # Adjust fitness of reproduction agents
                     parent1.fitness = parent1.fitness * 99 // 100
                     parent2.fitness = parent2.fitness * 99 // 100
+                    logging.info(
+                        f"Adjusted Fitness of {parent1.id} "
+                        f"to {parent1.fitness}."
+                    )
+                    logging.info(
+                        f"Adjusted Fitness of {parent2.id} "
+                        f"to {parent2.fitness}."
+                    )
+
+        # Ensure you have similar detailed logging in other relevant methods
 
         # Maintain population integrity
         assert (
@@ -2198,6 +2215,15 @@ class Population:
         where the top 0.2% agents by fitness
         play against all other agents in the same population.
         """
+        """
+        Conducts matches between elite agents
+        and non-elite agents within the population.
+
+        Elite agents are determined based on
+        the elite_percentage attribute.
+        Each elite agent plays against all non-elite agents.
+        """
+
         elite_percentage = 0.002  # 0.2%
         num_elite = max(
             2, int(self.size * elite_percentage)
@@ -2209,14 +2235,25 @@ class Population:
             agent for agent in self.agents if agent not in elite_agents
         ]
 
+        elite_ids = [agent.id for agent in elite_agents]
+        [agent.id for agent in non_elite_agents]
+
+        elite_info = (
+            f"Identified Elite Agents (Top {num_elite}):"
+            f"{', '.join(elite_ids)}"
+        )
+        non_elite_info = f"Non-Elite Agents Count: {len(non_elite_agents)}"
+
         print(
-            f"\n--- Intrapopulation Elite Matches for "
-            f"Population {self.population_id} ---"
+            "\n--- Intrapopulation Elite Matches "
+            f"for Population {self.population_id} ---"
         )
         logging.info(
-            f"Population {self.population_id} - Conducting Intrapopulation "
-            f"Elite Matches with {num_elite} elite agents."
+            f"Population {self.population_id} - Conducting "
+            f"Intrapopulation Elite Matches with {num_elite} elite agents."
         )
+        logging.info(elite_info)
+        logging.info(non_elite_info)
 
         # Schedule elite matches via GameScheduler
         for elite_agent in elite_agents:
@@ -2225,6 +2262,10 @@ class Population:
                     continue  # Skip self-match
                 self.game_scheduler.schedule_game(
                     elite_agent, opponent, game_type="intrapopulation_elite"
+                )
+                logging.debug(
+                    "Scheduled Intrapopulation Elite Match: "
+                    f"{elite_agent.id} vs {opponent.id}"
                 )
 
     def evaluate_fitness(self, meta_population=None):
@@ -2384,38 +2425,6 @@ class Population:
                         "not found in any population."
                     )
 
-        # Handle Most Fit Agent Change
-        most_fit_agent_unique = self.get_unique_most_fit_agent()
-        if most_fit_agent_unique:
-            if most_fit_agent_unique != self.current_most_fit_agent:
-                previous_agent = self.current_most_fit_agent
-                if previous_agent:
-                    logging.info(
-                        "Most fit agent in Population "
-                        f"{most_fit_agent_unique.population_id} changed"
-                        f" from {previous_agent.id} to "
-                        f"{most_fit_agent_unique.id}, with "
-                        f"fitness {most_fit_agent_unique.fitness}."
-                    )
-                else:
-                    logging.info(
-                        "Most fit agent in Population "
-                        f"{most_fit_agent_unique.population_id} is now "
-                        f"{most_fit_agent_unique.id}, with "
-                        f"fitness {most_fit_agent_unique.fitness}."
-                    )
-
-                # Update the current most fit agent reference
-                self.current_most_fit_agent = most_fit_agent_unique
-        else:
-            reproduction_agent = self.get_most_fit_agent()
-            logging.info(
-                "No unique most fit agent found. One most fit Agent is"
-                f"{reproduction_agent.id} in Population "
-                f"{reproduction_agent.population_id}, with "
-                f"fitness {reproduction_agent.fitness}."
-            )
-
         self.report_population_status()
 
         # Schedule intrapopulation elite matches
@@ -2529,7 +2538,7 @@ class Population:
         seminal_agents = []
         threshold = int(self.size * 0.05)  # 5% of the population
 
-        for agent in self.all_agents:
+        for agent in self.agents:
             agent_id = agent.id
             # Count how many current agents have this agent in their genealogy
             count = sum(
@@ -2919,23 +2928,22 @@ class MetaPopulation:
                     agent1 not in population.agents
                     or agent2 not in population.agents
                 ):
-                    print(
-                        f"Skipping {game_type} Game: "
-                        "One or both agents have been removed."
-                    )
                     logging.warning(
                         f"Skipping {game_type} Game between "
-                        f"{agent1.id} and {agent2.id}: "
-                        "One or both agents have been removed."
+                        f"{agent1.id} and {agent2.id}: One or both "
+                        "agents have been removed."
                     )
-                    continue
+                    continue  # Skip this game
 
                 # Determine if this game should be visualized
                 visualize_game = False
-                if game_type in ["intrapopulation_elite"]:
-                    visualize_game = False
-                    # Typically, elite matches
-                    # are not visualized unless sampled
+                sample_probability = 0.00005  # 0.005%
+                if random.random() < sample_probability:
+                    visualize_game = True
+                    logging.info(
+                        "Visualizing sampled Game between "
+                        f"{agent1.id} and {agent2.id}"
+                    )
 
                 # Store initial fitness before the game
                 initial_fitness_agent1 = agent1.fitness
@@ -2944,17 +2952,10 @@ class MetaPopulation:
                 # Play the game
                 game_instance = Game(agent1, agent2, visualize=visualize_game)
                 winner = game_instance.play()
-
-                # Update fitness based on game outcome
-                fitness_change_agent1 = game_instance.get_fitness_change(
-                    agent1
+                logging.info(
+                    f"Executed Game {game_instance.game_number}: "
+                    f"Winner - {winner.id if winner else 'None'}"
                 )
-                agent1.fitness += fitness_change_agent1
-
-                fitness_change_agent2 = game_instance.get_fitness_change(
-                    agent2
-                )
-                agent2.fitness += fitness_change_agent2
 
                 # Increment game counters
                 agent1.games_played_this_generation += 1
@@ -2969,71 +2970,93 @@ class MetaPopulation:
                             initial_fitness_agent1,
                             initial_fitness_agent2,
                         )
+                        logging.info(
+                            f"Visualized Game {game_instance.game_number} "
+                            f"between {agent1.id} and {agent2.id}"
+                        )
                     except Exception as e:
-                        print(
-                            f"An exception occurred during visualization: {e}"
-                        )
                         logging.error(
-                            f"Visualization error for Game between {agent1.id}"
-                            f" and {agent2.id}: {e}"
+                            f"An exception occurred during visualization of "
+                            f"Game {game_instance.game_number} between "
+                            f"{agent1.id} and {agent2.id}: {e}",
+                            exc_info=True,
                         )
 
-                # Print game results
-                print(
-                    f"{game_type.capitalize()} Game: {agent1.id} "
-                    f"(Pop {agent1.population_id}) vs {agent2.id} "
-                    f"(Pop {agent2.population_id})"
-                )
-                print(f" - {agent1.id} fitness: {agent1.fitness}")
-                print(f" - {agent2.id} fitness: {agent2.fitness}")
+                # Identify least fit agent
+                least_fit_agent = self.get_least_fit_agent()
+                if least_fit_agent:
+                    logging.info(
+                        "Least Fit Agent after Game "
+                        f"{game_instance.game_number}: {least_fit_agent.id}, "
+                        f"from Population {least_fit_agent.population_id}, "
+                        f"Fitness: {least_fit_agent.fitness}"
+                    )
+                else:
+                    logging.warning(
+                        "No least fit agent found after Game "
+                        f"{game_instance.game_number}."
+                    )
 
-                # Handle agent removal and replacement
-                for agent in [agent1, agent2]:
-                    if agent.fitness < 0:
-                        agent_population = self.get_population_of_agent(agent)
-                        if agent_population:
-                            # Replace the agent using the winner's population
-                            # if interpopulation
-                            if (
-                                game_type == "interpopulation_elite"
-                                and winner
-                                and winner != agent
-                            ):
-                                # Assign the result of the function call
-                                # to a variable
-                                other_population = (
-                                    self.get_population_of_agent(winner)
-                                )
+                # Identify most fit agent
+                most_fit_agent = self.get_most_fit_agent()
+                if most_fit_agent:
+                    logging.info(
+                        "Most Fit Agent after Game "
+                        f"{game_instance.game_number}"
+                        f": {most_fit_agent.id}, from Population "
+                        f"{most_fit_agent.population_id}, "
+                        f"Fitness: {most_fit_agent.fitness}"
+                    )
+                else:
+                    logging.warning(
+                        f"No most fit agent found after Game "
+                        f"{game_instance.game_number}."
+                    )
 
-                                # Use the variable in the function call
-                                agent_population.remove_and_replace_agent(
-                                    agent_to_remove=agent,
-                                    winner=winner,
-                                    meta_population=self,
-                                    other_population=other_population,
+                # Handle Agent Removal and Replacement
+                if least_fit_agent and least_fit_agent.fitness < 0:
+                    agent_population = (
+                        self.meta_population.get_population_of_agent(
+                            least_fit_agent
+                        )
+                    )
+                    if agent_population:
+                        # Determine if the game was interpopulation
+                        is_inter_population = (
+                            agent1.population_id != agent2.population_id
+                        )
+                        if is_inter_population and winner:
+                            other_population = (
+                                self.meta_population.get_population_of_agent(
+                                    winner
                                 )
-                            else:
-                                # Intrapopulation replacement
-                                agent_population.remove_and_replace_agent(
-                                    agent_to_remove=agent
-                                )
+                            )
+                            agent_population.remove_and_replace_agent(
+                                agent_to_remove=least_fit_agent,
+                                winner=winner,
+                                meta_population=self.meta_population,
+                                other_population=other_population,
+                            )
+                            logging.info(
+                                "Interpopulation Replacement: Removed "
+                                f"{least_fit_agent.id} and replaced with "
+                                f"offspring from {winner.id}."
+                            )
                         else:
-                            print(
-                                f"Agent {agent.id} not found in any population"
+                            # Intrapopulation replacement
+                            agent_population.remove_and_replace_agent(
+                                agent_to_remove=least_fit_agent
                             )
-                            logging.warning(
-                                f"Agent {agent.id} not found in any population"
+                            logging.info(
+                                "Intrapopulation Replacement: Removed "
+                                f"{least_fit_agent.id} from Population "
+                                f"{agent_population.population_id}."
                             )
-
-                # After determining winner, update fitness
-                # and handle remove and replacement
-                print(
-                    f"Regular Game {game_instance.game_number}: {agent1.id} "
-                    f"(Pop {agent1.population_id}) vs {agent2.id} "
-                    f"(Pop {agent2.population_id})"
-                )
-                print(f" - {agent1.id} fitness: {agent1.fitness}")
-                print(f" - {agent2.id} fitness: {agent2.fitness}")
+                    else:
+                        logging.warning(
+                            f"Agent {least_fit_agent.id} not found in any "
+                            "population during replacement."
+                        )
 
         print("--- Scheduled Games Execution Complete ---")
         logging.info("--- Scheduled Games Execution Complete ---")
