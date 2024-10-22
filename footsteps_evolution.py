@@ -962,7 +962,14 @@ class Game:
         cls.total_games_played += 1
         return cls.total_games_played
 
-    def __init__(self, player1, player2, board_size=8, visualize=False):
+    def __init__(
+        self,
+        player1,
+        player2,
+        board_size=8,
+        visualize=False,
+        game_type="regular",
+    ):
         self.game_number = Game.get_next_game_number()
         self.board_size = board_size
         self.players = {"player1": player1, "player2": player2}
@@ -980,8 +987,10 @@ class Game:
         self.winner = None
         self.loser = None  # Initialize loser
         self.outcome_code = None  # Initialize outcome_code
+        self.winning_reason = None  # Initialize winning_reason
         self.visualize = visualize
         self.history = []
+        self.game_type = game_type  # Store game_type
 
     def is_valid_move(self, position, opponent_position):
         x, y = position
@@ -1026,9 +1035,9 @@ class Game:
         return fitness_change
 
     def play(self):
-        print(f"\nStarting Game {self.game_number}")
+        print(f"\nStarting [{self.game_type}] Game {self.game_number}")
         logging.info(
-            f"Starting Game {self.game_number} "
+            f"Starting [{self.game_type}] Game {self.game_number} "
             f"between {self.players['player1'].id} "
             f"(Pop {self.players['player1'].population_id}) "
             f"and {self.players['player2'].id} "
@@ -1104,6 +1113,11 @@ class Game:
                         self.outcome_code = "reached_goal"
                         self.update_fitness()
                         self.record_final_state(turn)
+                        logging.info(
+                            f"[{self.game_type}] Game {self.game_number}"
+                            f"Result: Winner - {self.winner.id}"
+                            f", Reason - {self.winning_reason}"
+                        )
                         return self.winner
                 else:
                     # Invalid move; opponent wins
@@ -1113,6 +1127,11 @@ class Game:
                     self.outcome_code = "invalid_move"
                     self.update_fitness()
                     self.record_final_state(turn)
+                    logging.info(
+                        f"[{self.game_type}] Game {self.game_number}"
+                        f"Result: Winner - {self.winner.id}"
+                        f", Reason - {self.winning_reason}"
+                    )
                     return self.winner
 
                 # Non-mover stays in place
@@ -1133,6 +1152,11 @@ class Game:
                             self.outcome_code = "stayed_on_opponent_goal"
                             self.update_fitness()
                             self.record_final_state(turn)
+                            logging.info(
+                                f"[{self.game_type}] Game {self.game_number}"
+                                f"Result: Winner - {self.winner.id}"
+                                f", Reason - {self.winning_reason}"
+                            )
                             return self.winner
                     else:
                         self.consecutive_turns_on_goal[pid] = 0
@@ -1153,6 +1177,11 @@ class Game:
                         )
                         self.update_fitness()
                         self.record_final_state(turn)
+                        logging.info(
+                            f"[{self.game_type}] Game {self.game_number}"
+                            f"Result: Winner - {self.winner.id}"
+                            f", Reason - {self.winning_reason}"
+                        )
                         return self.winner
 
                 # Record history if visualizing
@@ -1232,6 +1261,11 @@ class Game:
                             self.outcome_code = "random_tiebreak"
                     self.update_fitness()
                     self.record_final_state(turn)
+                    logging.info(
+                        f"[{self.game_type}] Game {self.game_number}"
+                        f"Result: Winner - {self.winner.id}"
+                        f", Reason - {self.winning_reason}"
+                    )
                     return self.winner
 
         except Exception as e:
@@ -1245,6 +1279,9 @@ class Game:
             self.outcome_code = "error"
             self.update_fitness()
             self.record_final_state(turn)
+            logging.error(
+                f"[{self.game_type}] Game {self.game_number} Error: {e}"
+            )
             return self.winner
 
         # Visualization and logging after the loop are removed
@@ -2361,6 +2398,30 @@ class Population:
         game_number = 0  # Initialize game counter
 
         while self.game_scheduler.scheduled_games:
+
+            # **Check for Report Request After Each Game**
+            if report_event and report_event.is_set():
+                print("\n--- Generating Metapopulation Report ---")
+                logging.info("--- Generating Metapopulation Report ---")
+                meta_population.report_metapopulation_status()
+                print("--- Report Generated ---\n")
+                logging.info("--- Report Generated ---\n")
+
+                # Pause for 2 seconds
+                # time.sleep(2)
+
+                # **Clear the report_event to prevent repeated triggering**
+                report_event.clear()  # Reset the event
+
+                # Await continue_event
+                # If you wish to pause execution
+                # until the user presses another key,
+                # uncomment the following lines:
+                # print("Press any key to continue...")
+                # logging.info("Awaiting user input to continue.")
+                # continue_event.wait()
+                # continue_event.clear()
+
             game_data = self.game_scheduler.get_next_game()
             if not game_data:
                 break
@@ -2390,9 +2451,34 @@ class Population:
             initial_fitness_agent1 = agent1.fitness
             initial_fitness_agent2 = agent2.fitness
 
-            # Play the game
-            game = Game(agent1, agent2, visualize=visualize_game)
+            # Play the game with the specified game_type
+            game = Game(
+                agent1, agent2, visualize=visualize_game, game_type=game_type
+            )
             winner = game.play()
+
+            # **Check for Report Request After Each Game**
+            if report_event and report_event.is_set():
+                print("\n--- Generating Metapopulation Report ---")
+                logging.info("--- Generating Metapopulation Report ---")
+                meta_population.report_metapopulation_status()
+                print("--- Report Generated ---\n")
+                logging.info("--- Report Generated ---\n")
+
+                # Pause for 2 seconds
+                # time.sleep(2)
+
+                # **Clear the report_event to prevent repeated triggering**
+                report_event.clear()  # Reset the event
+
+                # Await continue_event
+                # If you wish to pause execution
+                # until the user presses another key,
+                # uncomment the following lines:
+                # print("Press any key to continue...")
+                # logging.info("Awaiting user input to continue.")
+                # continue_event.wait()
+                # continue_event.clear()
 
             # Increment game counters
             agent1.games_played_this_generation += 1
@@ -2481,7 +2567,7 @@ class Population:
                     logging.info("--- Report Generated ---\n")
 
                     # Pause for 2 seconds
-                    time.sleep(2)
+                    # time.sleep(2)
 
                     # **Clear the report_event to prevent repeated triggering**
                     report_event.clear()  # Reset the event
@@ -2501,6 +2587,30 @@ class Population:
         self.conduct_intrapopulation_elite_matches()
 
         while self.game_scheduler.scheduled_games:
+
+            # **Check for Report Request After Each Game**
+            if report_event and report_event.is_set():
+                print("\n--- Generating Metapopulation Report ---")
+                logging.info("--- Generating Metapopulation Report ---")
+                meta_population.report_metapopulation_status()
+                print("--- Report Generated ---\n")
+                logging.info("--- Report Generated ---\n")
+
+                # Pause for 2 seconds
+                # time.sleep(2)
+
+                # **Clear the report_event to prevent repeated triggering**
+                report_event.clear()  # Reset the event
+
+                # Await continue_event
+                # If you wish to pause execution
+                # until the user presses another key,
+                # uncomment the following lines:
+                # print("Press any key to continue...")
+                # logging.info("Awaiting user input to continue.")
+                # continue_event.wait()
+                # continue_event.clear()
+
             game_data = self.game_scheduler.get_next_game()
             if not game_data:
                 break
@@ -2530,8 +2640,10 @@ class Population:
             initial_fitness_agent1 = agent1.fitness
             initial_fitness_agent2 = agent2.fitness
 
-            # Play the game
-            game = Game(agent1, agent2, visualize=visualize_game)
+            # Play the game with the specified game_type
+            game = Game(
+                agent1, agent2, visualize=visualize_game, game_type=game_type
+            )
             winner = game.play()
 
             # Increment game counters
@@ -2577,6 +2689,29 @@ class Population:
                 f"Fitness: {most_fit_agent.fitness}"
             )
 
+            # **Check for Report Request After Each Game**
+            if report_event and report_event.is_set():
+                print("\n--- Generating Metapopulation Report ---")
+                logging.info("--- Generating Metapopulation Report ---")
+                meta_population.report_metapopulation_status()
+                print("--- Report Generated ---\n")
+                logging.info("--- Report Generated ---\n")
+
+                # Pause for 2 seconds
+                # time.sleep(2)
+
+                # **Clear the report_event to prevent repeated triggering**
+                report_event.clear()  # Reset the event
+
+                # Await continue_event
+                # If you wish to pause execution
+                # until the user presses another key,
+                # uncomment the following lines:
+                # print("Press any key to continue...")
+                # logging.info("Awaiting user input to continue.")
+                # continue_event.wait()
+                # continue_event.clear()
+
             # Handle Agent Removal and Replacement
             if least_fit_agent.fitness < 0:
                 agent_population = meta_population.get_population_of_agent(
@@ -2621,7 +2756,7 @@ class Population:
                     logging.info("--- Report Generated ---\n")
 
                     # Pause for 2 seconds
-                    time.sleep(2)
+                    # time.sleep(2)
 
                     # **Clear the report_event to prevent repeated triggering**
                     report_event.clear()  # Reset the event
@@ -3152,7 +3287,7 @@ class MetaPopulation:
                 if random.random() < sample_probability:
                     visualize_game = True
                     logging.info(
-                        "Visualizing sampled Game between "
+                        f"Visualizing sampled {game_type} Game between "
                         f"{agent1.id} and {agent2.id}"
                     )
 
@@ -3160,11 +3295,17 @@ class MetaPopulation:
                 initial_fitness_agent1 = agent1.fitness
                 initial_fitness_agent2 = agent2.fitness
 
-                # Play the game
-                game_instance = Game(agent1, agent2, visualize=visualize_game)
+                # Play the game with the specified game_type
+                game_instance = Game(
+                    agent1,
+                    agent2,
+                    visualize=visualize_game,
+                    game_type=game_type,
+                )
                 winner = game_instance.play()
                 logging.info(
-                    f"Executed Game {game_instance.game_number}: "
+                    f"Executed [{game_instance.game_type}]"
+                    f"Game {game_instance.game_number}: "
                     f"Winner - {winner.id if winner else 'None'}"
                 )
 
@@ -3311,7 +3452,9 @@ class MetaPopulation:
             agent2.fitness
 
             # Play the game
-            game_instance = Game(agent1, agent2, visualize=visualize_game)
+            game_instance = Game(
+                agent1, agent2, visualize=visualize_game, game_type=game_type
+            )
             winner = game_instance.play()
 
             # Update fitness based on game outcome
@@ -3630,6 +3773,16 @@ class MetaPopulation:
 
                 # Use remove_and_replace_agent to
                 # ensure population size remains stable
+                # Schedule the game with a specific game_type
+                # For cross-population elite matches, set game_type accordingly
+                # For example, "cross_population_elite"
+
+                # Assuming the replacement is handled via sexual reproduction,
+                # the game_type might not be directly involved here.
+                # However, if a game is played, ensure that it's scheduled
+                # with the correct type.
+
+                # Add offspring to the first parent's population
                 parent_population.remove_and_replace_agent(
                     agent_to_remove=parent_population.get_least_fit_agent(),
                     winner=None,
