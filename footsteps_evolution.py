@@ -1,4 +1,5 @@
 import cProfile
+import io
 import logging
 import math
 
@@ -195,6 +196,18 @@ def format_bid_range(bid_range):
 
 
 plt.ion()  # Turn on interactive mode
+
+
+def profile_get_seminal_agents(self):
+    pr = cProfile.Profile()
+    pr.enable()
+    self.get_seminal_agents()
+    pr.disable()
+    s = io.StringIO()
+    sortby = "cumulative"
+    ps = pstats.Stats(pr, stream=s).sort_stats(sortby)
+    ps.print_stats(10)  # Print top 10 functions
+    print(s.getvalue())
 
 
 class KeyListener(threading.Thread):
@@ -1114,7 +1127,7 @@ class Game:
                         self.update_fitness()
                         self.record_final_state(turn)
                         logging.info(
-                            f"[{self.game_type}] Game {self.game_number}"
+                            f"[{self.game_type}] Game {self.game_number} "
                             f"Result: Winner - {self.winner.id}"
                             f", Reason - {self.winning_reason}"
                         )
@@ -1128,7 +1141,7 @@ class Game:
                     self.update_fitness()
                     self.record_final_state(turn)
                     logging.info(
-                        f"[{self.game_type}] Game {self.game_number}"
+                        f"[{self.game_type}] Game {self.game_number} "
                         f"Result: Winner - {self.winner.id}"
                         f", Reason - {self.winning_reason}"
                     )
@@ -1153,7 +1166,7 @@ class Game:
                             self.update_fitness()
                             self.record_final_state(turn)
                             logging.info(
-                                f"[{self.game_type}] Game {self.game_number}"
+                                f"[{self.game_type}] Game {self.game_number} "
                                 f"Result: Winner - {self.winner.id}"
                                 f", Reason - {self.winning_reason}"
                             )
@@ -1178,7 +1191,7 @@ class Game:
                         self.update_fitness()
                         self.record_final_state(turn)
                         logging.info(
-                            f"[{self.game_type}] Game {self.game_number}"
+                            f"[{self.game_type}] Game {self.game_number} "
                             f"Result: Winner - {self.winner.id}"
                             f", Reason - {self.winning_reason}"
                         )
@@ -1262,7 +1275,7 @@ class Game:
                     self.update_fitness()
                     self.record_final_state(turn)
                     logging.info(
-                        f"[{self.game_type}] Game {self.game_number}"
+                        f"[{self.game_type}] Game {self.game_number} "
                         f"Result: Winner - {self.winner.id}"
                         f", Reason - {self.winning_reason}"
                     )
@@ -1848,15 +1861,20 @@ class Population:
         self.elite_percentage = (
             0.02  # 2% elite agents for intrapopulation matches
         )
+        self.game_scheduler = (
+            GameScheduler()
+        )  # Initialize GameScheduler for the population
+
+        # Initialize genealogy_counts
+        self.genealogy_counts = (
+            {}
+        )  # Maps agent_id to count of genealogies including it
 
         for _ in range(size):
             agent = Agent(population_id=self.population_id)
             self.agents.append(agent)
             self.all_agents.append(agent)
-
-        self.game_scheduler = (
-            GameScheduler()
-        )  # Initialize GameScheduler for the population
+            self._update_genealogy_counts_on_add(agent)
 
         # Initialize previous most fit agent
         self.previous_most_fit_agent = self.get_unique_most_fit_agent()
@@ -1868,6 +1886,47 @@ class Population:
         self.base_mutation_rate = 0.05
         self.mutation_rate = self.base_mutation_rate
         self.fitness_history = []  # To track fitness over generations
+
+    def _update_genealogy_counts_on_add(self, agent):
+        """
+        Updates the genealogy_counts when a new agent is added.
+        """
+        for ancestor_id in agent.genealogy:
+            if ancestor_id != agent.id:
+                self.genealogy_counts[ancestor_id] = (
+                    self.genealogy_counts.get(ancestor_id, 0) + 1
+                )
+
+    def _update_genealogy_counts_on_remove(self, agent):
+        """
+        Updates the genealogy_counts when an agent is removed.
+        """
+        for ancestor_id in agent.genealogy:
+            if ancestor_id != agent.id:
+                if self.genealogy_counts.get(ancestor_id, 0) > 0:
+                    self.genealogy_counts[ancestor_id] -= 1
+                else:
+                    logging.warning(
+                        "Genealogy count inconsistency for "
+                        f"Agent {ancestor_id}."
+                    )
+
+    def _verify_genealogy_counts(self):
+        """
+        Verifies that genealogy_counts accurately
+        reflects the current population.
+        """
+        computed_counts = {}
+        for agent in self.agents:
+            for ancestor_id in agent.genealogy:
+                if ancestor_id != agent.id:
+                    computed_counts[ancestor_id] = (
+                        computed_counts.get(ancestor_id, 0) + 1
+                    )
+
+        assert (
+            self.genealogy_counts == computed_counts
+        ), "Genealogy counts mismatch!"
 
     def enforce_population_size(self):
         """
@@ -1897,20 +1956,14 @@ class Population:
 
     def add_agent(self, agent):
         """
-        Adds an agent to the population and ensures the population size
-        remains stable.
-        If the population exceeds its size, removes the least fit agent.
-
-        Args:
-            agent (Agent): The agent to be added.
+        Adds an agent to the population and updates genealogy_counts.
         """
-        assert (
-            agent not in self.agents
-        ), f"Agent {agent.id} already exists in Population"
-        f"{self.population_id}."
+        assert agent not in self.agents, f"Agent {agent.id} already exists in "
+        f"Population {self.population_id}."
 
         self.agents.append(agent)
         self.all_agents.append(agent)
+        self._update_genealogy_counts_on_add(agent)  # Update genealogy_counts
         logging.info(
             f"Added Agent {agent.id} to Population {self.population_id}."
         )
@@ -1927,21 +1980,27 @@ class Population:
                 self.remove_agent(least_fit_agent)
                 logging.info(
                     f"Maintained Population Size: Removed Least Fit Agent "
-                    f"{least_fit_agent.id} with fitness "
-                    f"{least_fit_agent.fitness} from Population "
-                    f"{self.population_id}."
+                    f"{least_fit_agent.id} with "
+                    f"fitness {least_fit_agent.fitness} "
+                    f"from Population {self.population_id}."
                 )
                 print(
                     f"Maintained Population Size: Removed Least Fit Agent "
-                    f"{least_fit_agent.id} with fitness "
-                    f"{least_fit_agent.fitness} from Population "
-                    f"{self.population_id}."
+                    f"{least_fit_agent.id} with "
+                    f"fitness {least_fit_agent.fitness} "
+                    f"from Population {self.population_id}."
                 )
                 self.game_scheduler.remove_agent_games(least_fit_agent)
 
     def remove_agent(self, agent):
+        """
+        Removes an agent from the population and updates genealogy_counts.
+        """
         if agent in self.agents:
             self.agents.remove(agent)
+            self._update_genealogy_counts_on_remove(
+                agent
+            )  # Update genealogy_counts
             print(
                 f"Removed Agent {agent.id} from Population "
                 f"{self.population_id} with fitness {agent.fitness}"
@@ -2875,22 +2934,14 @@ class Population:
         the seminal agent in their genealogy set.
 
         Returns:
-            List of tuples: [(agent_id, offspring_count), ...]
+            List of tuples: [(agent_id, count), ...]
         """
-        seminal_agents = []
         threshold = int(self.size * 0.05)  # 5% of the population
-
-        for agent in self.agents:
-            agent_id = agent.id
-            # Count how many current agents have this agent in their genealogy
-            count = sum(
-                1
-                for a in self.agents
-                if agent_id in a.genealogy and a.id != agent_id
-            )
-            if count >= threshold:
-                seminal_agents.append((agent_id, count))
-
+        seminal_agents = [
+            (agent_id, count)
+            for agent_id, count in self.genealogy_counts.items()
+            if count >= threshold
+        ]
         return seminal_agents
 
     def report_population_status(self, game_number=None):
