@@ -2952,6 +2952,39 @@ class Population:
         )
         return (sorted_agents[0], sorted_agents[1])
 
+    def get_most_prolific_agent(self):
+        """
+        Retrieves the unique agent with the highest number of living offspring.
+
+        Returns:
+            Agent: The most prolific agent if unique, else None.
+        """
+        if not self.agents:
+            logging.warning(f"Population {self.population_id} has no agents.")
+            return None
+
+        # Find the maximum number of offspring_count
+        max_offspring = max(agent.offspring_count for agent in self.agents)
+
+        # Gather all agents with the maximum offspring_count
+        prolific_agents = [
+            agent
+            for agent in self.agents
+            if agent.offspring_count == max_offspring
+        ]
+
+        if len(prolific_agents) == 1:
+            return prolific_agents[0]
+        else:
+            # If there's a tie, you might want to handle it differently
+            # For now, return None to indicate no unique most prolific agent
+            logging.info(
+                f"Population {self.population_id} has multiple "
+                "agents with the highest offspring_count: "
+                f"{[agent.id for agent in prolific_agents]}"
+            )
+            return None
+
     def get_seminal_agents(self):
         """
         Identifies seminal agents based on the following criteria:
