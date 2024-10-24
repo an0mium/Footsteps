@@ -1164,13 +1164,17 @@ class Game:
                         self.consecutive_turns_on_goal[pid] += 1
                         # When a player stays on opponent's goal too long,
                         # player loses
-                        if self.consecutive_turns_on_goal[pid] > 5:
+                        max_turns_on_goal = 6
+                        if (
+                            self.consecutive_turns_on_goal[pid]
+                            > max_turns_on_goal
+                        ):
                             self.winner = self.players[opponent_id]
                             self.loser = self.players[pid]
                             self.winning_reason = (
                                 f"{pid} stayed on opponent's goal too long"
                             )
-                            "goal for 3 consecutive turns."
+                            "goal for too many consecutive turns."
                             self.outcome_code = "stayed_on_opponent_goal"
                             self.update_fitness()
                             self.record_final_state(turn)
@@ -1220,7 +1224,7 @@ class Game:
                     )
 
                 turn += 1
-                if turn > 120:  # Adjust as needed
+                if turn > 180:  # Adjust as needed
                     # Determine winner based on proximity to goal or points
                     distances = {
                         "player1": self.manhattan_distance(
@@ -3072,14 +3076,14 @@ class Population:
             logging.info(most_prolific_info)
 
             # Additional Check
-            if prolific_count < int(self.size * 0.05):
-                warning_info = (
-                    f"Warning: Most Prolific Agent {most_prolific_agent.id} "
-                    f"has genealogy count {prolific_count}"
-                    "which is below the threshold."
-                )
-                print(warning_info)
-                logging.warning(warning_info)
+            # if prolific_count < int(self.size * 0.05):
+            #    warning_info = (
+            #        f"Warning: Most Prolific Agent {most_prolific_agent.id} "
+            #        f"has genealogy count {prolific_count} "
+            #        "which is below the threshold."
+            #    )
+            #    print(warning_info)
+            #    logging.warning(warning_info)
 
         else:
             print("No Prolific Agents found.")
