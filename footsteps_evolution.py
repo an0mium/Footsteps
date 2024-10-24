@@ -695,6 +695,7 @@ class Agent(Player):
         self.population_id = population_id
         if strategy is None:
             self.strategy = Strategy()
+            logging.info(f"Initializing Random Strategy for Agent {self.id}")
         else:
             self.strategy = strategy
         if genealogy is None:
@@ -737,6 +738,10 @@ class Agent(Player):
             parents=[self.id],  # Set parent to self for asexual reproduction
         )
         self.offspring_count += 1  # Increment offspring count
+        logging.debug(
+            f"Asexual Offspring Created: {offspring.id} inherits genealogy "
+            f"{offspring.genealogy}"
+        )
         return offspring
 
     def sexual_offspring(self, other_agent):
@@ -761,6 +766,10 @@ class Agent(Player):
         # Increment offspring counts for both parents
         self.offspring_count += 1
         other_agent.offspring_count += 1
+        logging.debug(
+            f"Sexual Offspring Created: {child.id} inherits genealogy "
+            f"{child.genealogy}"
+        )
         return child
 
     def increment_game_counter(self):
@@ -1155,11 +1164,11 @@ class Game:
                         self.consecutive_turns_on_goal[pid] += 1
                         # When a player stays on opponent's goal too long,
                         # player loses
-                        if self.consecutive_turns_on_goal[pid] > 2:
+                        if self.consecutive_turns_on_goal[pid] > 5:
                             self.winner = self.players[opponent_id]
                             self.loser = self.players[pid]
                             self.winning_reason = (
-                                f"{pid} stayed on opponent's "
+                                f"{pid} stayed on opponent's goal too long"
                             )
                             "goal for 3 consecutive turns."
                             self.outcome_code = "stayed_on_opponent_goal"
@@ -1888,27 +1897,31 @@ class Population:
         self.fitness_history = []  # To track fitness over generations
 
     def _update_genealogy_counts_on_add(self, agent):
-        """
-        Updates the genealogy_counts when a new agent is added.
-        """
         for ancestor_id in agent.genealogy:
             if ancestor_id != agent.id:
                 self.genealogy_counts[ancestor_id] = (
                     self.genealogy_counts.get(ancestor_id, 0) + 1
                 )
+                logging.debug(
+                    f"Genealogy Count Updated On Add: Agent {ancestor_id} "
+                    f"now has {self.genealogy_counts[ancestor_id]} "
+                    "genealogies."
+                )
 
     def _update_genealogy_counts_on_remove(self, agent):
-        """
-        Updates the genealogy_counts when an agent is removed.
-        """
         for ancestor_id in agent.genealogy:
             if ancestor_id != agent.id:
                 if self.genealogy_counts.get(ancestor_id, 0) > 0:
                     self.genealogy_counts[ancestor_id] -= 1
+                    logging.debug(
+                        f"Genealogy Updated On Remove: Agent {ancestor_id} "
+                        f"now has {self.genealogy_counts[ancestor_id]} "
+                        "genealogies."
+                    )
                 else:
                     logging.warning(
-                        "Genealogy count inconsistency for "
-                        f"Agent {ancestor_id}."
+                        f"Genealogy inconsistency for Agent {ancestor_id} "
+                        "during removal."
                     )
 
     def _verify_genealogy_counts(self):
@@ -1991,6 +2004,12 @@ class Population:
                     f"from Population {self.population_id}."
                 )
                 self.game_scheduler.remove_agent_games(least_fit_agent)
+        try:
+            self._verify_genealogy_counts()
+        except AssertionError as ae:
+            logging.error(f"Genealogy Counts Verification Failed: {ae}")
+            print(f"Genealogy Counts Verification Failed: {ae}")
+            # Implement recovery or halt the simulation if necessary
 
     def remove_agent(self, agent):
         """
@@ -2039,6 +2058,12 @@ class Population:
                 f"Attempted to remove Agent {agent.id} from Population "
                 f"{self.population_id}, but agent was not found."
             )
+        try:
+            self._verify_genealogy_counts()
+        except AssertionError as ae:
+            logging.error(f"Genealogy Counts Verification Failed: {ae}")
+            print(f"Genealogy Counts Verification Failed: {ae}")
+            # Implement recovery or halt the simulation if necessary
 
     def calculate_average_fitness(self):
         if not self.agents:
@@ -2215,7 +2240,7 @@ class Population:
             winner_population = meta_population.populations[
                 winner.population_id - 1
             ]
-            logging.debug(
+            logging.info(
                 "Replacement will be derived from "
                 f"winner's population: {winner_population.population_id}"
             )
@@ -2235,7 +2260,7 @@ class Population:
             unique_most_fit_agent.fitness = (
                 unique_most_fit_agent.fitness * 99 // 100
             )
-            logging.debug(
+            logging.info(
                 f"Adjusted Fitness of {unique_most_fit_agent.id}"
                 f"to {unique_most_fit_agent.fitness}."
             )
@@ -2942,6 +2967,28 @@ class Population:
             for agent_id, count in self.genealogy_counts.items()
             if count >= threshold
         ]
+        logging.info(
+            f"Identified Seminal Agents (Threshold: {threshold}):"
+            f"{seminal_agents}"
+        )
+        # Ensure most prolific agent is included if they meet the threshold
+        most_prolific_agent = self.get_most_prolific_agent()
+        if most_prolific_agent:
+            prolific_count = self.genealogy_counts.get(
+                most_prolific_agent.id, 0
+            )
+            if (
+                prolific_count >= threshold
+                and (most_prolific_agent.id, prolific_count)
+                not in seminal_agents
+            ):
+                seminal_agents.append((most_prolific_agent.id, prolific_count))
+                logging.info(
+                    f"Most Prolific Agent {most_prolific_agent.id} "
+                    "added to Seminal Agents."
+                )
+        for agent_id, count in seminal_agents:
+            logging.info(f"Seminal Agent: {agent_id} in {count} genealogies.")
         return seminal_agents
 
     def report_population_status(self, game_number=None):
@@ -2977,14 +3024,30 @@ class Population:
             self.agents, key=lambda a: a.offspring_count, default=None
         )
         if most_prolific_agent and most_prolific_agent.offspring_count > 0:
+            # Log the genealogy count for the most prolific agent
+            prolific_count = self.genealogy_counts.get(
+                most_prolific_agent.id, 0
+            )
             most_prolific_info = (
                 f"Most Prolific Agent in Population {self.population_id}: "
                 f"{most_prolific_agent.id} "
                 f"(Living Offspring: {most_prolific_agent.offspring_count}) "
+                f"(Genealogy Count: {prolific_count}) "
                 f"(Fitness: {most_prolific_agent.fitness})"
             )
             print(most_prolific_info)
             logging.info(most_prolific_info)
+
+            # Additional Check
+            if prolific_count < int(self.size * 0.05):
+                warning_info = (
+                    f"Warning: Most Prolific Agent {most_prolific_agent.id} "
+                    f"has genealogy count {prolific_count}"
+                    "which is below the threshold."
+                )
+                print(warning_info)
+                logging.warning(warning_info)
+
         else:
             print("No Prolific Agents found.")
             logging.info("No Prolific Agents found.")
