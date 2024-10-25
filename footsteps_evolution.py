@@ -738,7 +738,11 @@ class Agent(Player):
             parents=[self.id],  # Set parent to self for asexual reproduction
         )
         self.offspring_count += 1  # Increment offspring count
-        logging.debug(
+
+        # Optionally adjust fitness if needed
+        self.fitness = self.fitness * 99 // 100
+
+        logging.info(
             f"Asexual Offspring Created: {offspring.id} inherits genealogy "
             f"{offspring.genealogy}"
         )
@@ -766,7 +770,12 @@ class Agent(Player):
         # Increment offspring counts for both parents
         self.offspring_count += 1
         other_agent.offspring_count += 1
-        logging.debug(
+
+        # Optionally adjust fitness if needed
+        self.fitness = self.fitness * 99 // 100
+        other_agent.fitness = other_agent.fitness * 99 // 100
+
+        logging.info(
             f"Sexual Offspring Created: {child.id} inherits genealogy "
             f"{child.genealogy}"
         )
@@ -890,12 +899,12 @@ class Agent(Player):
                 )
                 / (self.games_played + 12 - 1)
                 if self.games_played + 12 - 1 > 0
-                else 1
+                else 12
             )
             std_dev = math.sqrt(variance_est) if variance_est > 0 else 12
 
-        min_est = mean_est - 3 * std_dev
-        max_est = mean_est + 3 * std_dev
+        min_est = mean_est - std_dev
+        max_est = mean_est + std_dev
         return (min_est, mean_est, max_est)
 
 
@@ -1035,7 +1044,7 @@ class Game:
         fitness_change = 0
         if player == self.winner:
             if self.outcome_code == "reached_goal":
-                fitness_change = 18
+                fitness_change = 28
             elif self.outcome_code == "proximity_tiebreak":
                 fitness_change = 3
             elif self.outcome_code in ["points_tiebreak", "random_tiebreak"]:
@@ -1053,7 +1062,7 @@ class Game:
             elif self.outcome_code != "error":
                 fitness_change = -3 - player.fitness // 100
             # Add other negative outcomes if any
-        fitness_change += 1
+        # fitness_change += 1
         return fitness_change
 
     def play(self):
@@ -1872,7 +1881,7 @@ class Population:
         self.agents = []
         self.all_agents = []
         self.elite_percentage = (
-            0.02  # 2% elite agents for intrapopulation matches
+            0.05  # 5% elite agents for intrapopulation matches
         )
         self.game_scheduler = (
             GameScheduler()
@@ -2277,10 +2286,6 @@ class Population:
                 f"to Population {self.population_id} "
                 f"derived from {unique_most_fit_agent.id}."
             )
-            # Optionally adjust fitness if needed
-            unique_most_fit_agent.fitness = (
-                unique_most_fit_agent.fitness * 99 // 100
-            )
             logging.info(
                 f"Adjusted Fitness of {unique_most_fit_agent.id}"
                 f"to {unique_most_fit_agent.fitness}."
@@ -2367,9 +2372,6 @@ class Population:
                         f"between {parent1.id} and {parent2.id}."
                     )
 
-                    # Adjust fitness of reproduction agents
-                    parent1.fitness = parent1.fitness * 99 // 100
-                    parent2.fitness = parent2.fitness * 99 // 100
                     logging.info(
                         f"Adjusted Fitness of {parent1.id} "
                         f"to {parent1.fitness}."
@@ -2411,7 +2413,7 @@ class Population:
         Each elite agent plays against all non-elite agents.
         """
 
-        elite_percentage = 0.02  # 2%
+        elite_percentage = 0.05  # 5%
         num_elite = max(
             2, int(self.size * elite_percentage)
         )  # Ensure at least 2 elite agents
@@ -2844,7 +2846,7 @@ class Population:
                     logging.info(
                         f"Agent {least_fit_agent.id} from "
                         f"Population {least_fit_agent.population_id}"
-                        "removed and replaced."
+                        " removed and replaced."
                     )
                 else:
                     logging.warning(
@@ -3066,7 +3068,7 @@ class Population:
             prolific_count = self.genealogy_counts.get(oldest_agent.id, 0)
         oldest_agent_info = (
             f"Oldest Remaining Agent in Population {self.population_id}: "
-            f"{oldest_agent.id}"
+            f"{oldest_agent.id} \n"
             f"(Games Played: {oldest_agent.game_counter}) \n"
             f"(Living Offspring: {oldest_agent.offspring_count}) \n"
             f"(Genealogy Count: {prolific_count}) \n"
@@ -3165,7 +3167,7 @@ class Population:
         # 6. Diversity
         diversity = self.calculate_diversity()
         diversity_info = (
-            f"Diversity in Population {self.population_id}: {diversity:.4f}"
+            f"Diversity in Population {self.population_id}: {diversity:.4f}\n"
         )
         print(diversity_info)
         logging.info(diversity_info)
@@ -3198,7 +3200,7 @@ class Population:
                     primary_agent = top_agents_sorted[0]
                     tie_count = len(top_agents_sorted) - 1
                     change_info = (
-                        f"Most fit agent in Population {self.population_id} "
+                        f"Most Fit Agent in Population {self.population_id} "
                         "changed from "
                         f"{previous_agent_id} to {primary_agent.id}, "
                         f"with fitness {primary_agent.fitness}. "
@@ -3206,7 +3208,7 @@ class Population:
                     )
                 else:
                     change_info = (
-                        f"Most fit agent in Population {self.population_id} "
+                        f"Most Fit Agent in Population {self.population_id} "
                         "changed from "
                         f"{previous_agent_id} to {unique_most_fit_agent.id}, "
                         f"with fitness {unique_most_fit_agent.fitness}\n(Games"
@@ -3228,7 +3230,7 @@ class Population:
                     )
                 if most_fit_agent:
                     change_info = (
-                        f"Most fit agent in Population {self.population_id} "
+                        f"Most Fit Agent in Population {self.population_id} "
                         f"is currently {most_fit_agent.id}, "
                         f"with fitness {most_fit_agent.fitness}.\n"
                         f"(Games Played: {most_fit_agent.game_counter}) \n"
@@ -3260,7 +3262,7 @@ class Population:
                     )
                 tie_count = len(top_agents_sorted) - 1
                 change_info = (
-                    f"A Most fit agent in Population {self.population_id} "
+                    f"A Most Fit Agent in Population {self.population_id} "
                     f"is {primary_agent.id}, "
                     f"with fitness {primary_agent.fitness}. "
                     f"(+ {tie_count} others)\n"
@@ -3283,7 +3285,7 @@ class Population:
                     else "None"
                 )
                 change_info = (
-                    f"Least fit agent in Population {self.population_id} "
+                    f"Least Fit Aagent in Population {self.population_id} "
                     "changed from "
                     f"{previous_agent_id} to {unique_least_fit_agent.id}, "
                     f"with fitness {unique_least_fit_agent.fitness}."
@@ -3362,15 +3364,19 @@ class Population:
         # Keep the top agents
         survivors = sorted_agents[:num_elite]
 
-        # These agents retain their IDs
-        next_generation = survivors.copy()
+        # Remove agents that are not in survivors
+        agents_to_remove = [
+            agent for agent in self.agents if agent not in survivors
+        ]
+        for agent in agents_to_remove:
+            self.remove_agent(agent)
+
+        # Now self.agents only contains survivors
 
         # Calculate how many offspring need to be generated
         # to maintain population size
-        num_offspring_needed = self.size - len(survivors)
+        num_offspring_needed = self.size - len(self.agents)
 
-        # Generate offspring
-        offspring = []
         # Fitness values for survivors
         survivor_fitness = [agent.fitness for agent in survivors]
         total_fitness = sum(survivor_fitness)
@@ -3383,7 +3389,9 @@ class Population:
                 fitness / total_fitness for fitness in survivor_fitness
             ]
 
-        while len(offspring) < num_offspring_needed:
+        # Generate offspring and add them using add_agent
+        offspring_count = 0
+        while offspring_count < num_offspring_needed:
             # Select parents based on fitness proportionate selection
             parent1 = random.choices(
                 survivors, weights=survivor_probabilities, k=1
@@ -3392,38 +3400,33 @@ class Population:
                 survivors, weights=survivor_probabilities, k=1
             )[0]
 
-            # Check if there is a unique most fit agent
-            unique_most_fit_agent = self.get_unique_most_fit_agent()
+            # Check if there is a unique most fit agent among survivors
+            unique_most_fit_agent = None
+            max_fitness = max(agent.fitness for agent in survivors)
+            top_agents = [
+                agent for agent in survivors if agent.fitness == max_fitness
+            ]
+            if len(top_agents) == 1:
+                unique_most_fit_agent = top_agents[0]
+
             if unique_most_fit_agent:
                 # Perform asexual reproduction
                 new_offspring = unique_most_fit_agent.asexual_offspring()
-                offspring.append(new_offspring)
+                # Add to population using add_agent
+                self.add_agent(new_offspring)
+                offspring_count += 1
             else:
                 # Sexual reproduction
-                child_strategy = parent1.strategy.crossover(parent2.strategy)
-                child_strategy.mutate(mutation_rate=self.mutation_rate)
-                # Combine genealogies
-                child_genealogy = parent1.genealogy.union(parent2.genealogy)
-                child = Agent(
-                    strategy=child_strategy,
-                    genealogy=child_genealogy,
-                    population_id=self.population_id,
-                )
-                offspring.append(child)
+                child = parent1.sexual_offspring(parent2)
+                # Add to population using add_agent
+                self.add_agent(child)
+                offspring_count += 1
 
-                # Asexual reproduction from parent1
-                if len(offspring) < num_offspring_needed:
-                    child_strategy = deepcopy(parent1.strategy)
-                    child_strategy.mutate(mutation_rate=self.mutation_rate)
-                    # Inherit genealogy from parent1
-                    child_genealogy = set(parent1.genealogy)
-                    child = Agent(
-                        strategy=child_strategy, genealogy=child_genealogy
-                    )
-                    offspring.append(child)
-
-        # Combine survivors and offspring to form the next generation
-        self.agents = next_generation + offspring
+                # Optionally, include asexual reproduction from parent1
+                if offspring_count < num_offspring_needed:
+                    new_offspring = parent1.asexual_offspring()
+                    self.add_agent(new_offspring)
+                    offspring_count += 1
 
 
 # 5b. Define the MetaPopulation Class
@@ -3487,6 +3490,7 @@ class MetaPopulation:
                     report_event=report_event,
                     continue_event=continue_event,
                 )
+                population.adjust_elite_percentage()
                 population.generate_next_generation()
                 # Report population status after generation
                 self.report_metapopulation_status()
@@ -3970,7 +3974,7 @@ class MetaPopulation:
         try:
             print("\n--- Conducting Cross-Population Reproduction ---")
             logging.info("\n--- Conducting Cross-Population Reproduction ---")
-            elite_percentage = 0.02
+            elite_percentage = 0.05
             # Define elite percentage for cross-population reproduction
 
             # Collect elite agents from each population
@@ -4226,7 +4230,7 @@ class MetaPopulation:
         logging.info(
             "\n--- Conducting Elite Matches Between Populations ---\n"
         )
-        elite_percentage = 0.02  # 2%
+        elite_percentage = 0.05  # 5%
         total_agents = self.num_populations * self.population_size
         num_elite = max(
             2, int(total_agents * elite_percentage)
