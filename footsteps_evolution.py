@@ -1056,7 +1056,7 @@ class Game:
             if self.outcome_code == "ran_out_of_points":
                 fitness_change = -6 - player.fitness // 100
             elif self.outcome_code == "stayed_on_opponent_goal":
-                fitness_change = -18 - player.fitness // 100
+                fitness_change = -28 - player.fitness // 100
             elif self.outcome_code == "invalid_move":
                 fitness_change = -28 - player.fitness // 100
             elif self.outcome_code != "error":
@@ -1874,7 +1874,7 @@ class Population:
         ...
     """
 
-    def __init__(self, size=5040, population_id=1, meta_population=None):
+    def __init__(self, size=840, population_id=1, meta_population=None):
         self.size = size
         self.population_id = population_id
         self.meta_population = meta_population  # Reference to MetaPopulation
@@ -3300,8 +3300,8 @@ class Population:
                 logging.info(change_info)
                 self.previous_least_fit_agent = None
 
-        print("\n--- Population Status Report Complete ---")
-        logging.info("\n--- Population Status Report Complete ---\n")
+        print("--- Population Status Report Complete ---\n\n")
+        logging.info("--- Population Status Report Complete ---\n\n")
 
     def visualize_game_change(self, previous_agent, new_agent):
         """
@@ -3432,7 +3432,7 @@ class Population:
 # 5b. Define the MetaPopulation Class
 #
 class MetaPopulation:
-    def __init__(self, num_populations=12, population_size=5040):
+    def __init__(self, num_populations=12, population_size=840):
         self.populations = [
             Population(
                 size=population_size, population_id=i + 1, meta_population=self
@@ -4334,7 +4334,7 @@ def main():
 
         # Initialize meta-population
         meta_population = MetaPopulation(
-            num_populations=12, population_size=5040
+            num_populations=12, population_size=840
         )
 
         # Initialize the report_event and continue_event
