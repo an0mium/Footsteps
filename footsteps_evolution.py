@@ -2977,35 +2977,32 @@ class Population:
 
     def get_most_prolific_agent(self):
         """
-        Retrieves the unique agent with the highest number of living offspring.
+        Retrieves the agent(s) with the highest number of living offspring.
 
         Returns:
-            Agent: The most prolific agent if unique, else None.
+            tuple: (oldest_agent, num_others)
         """
         if not self.agents:
             logging.warning(f"Population {self.population_id} has no agents.")
-            return None
+            return None, 0
 
-        # Find the maximum number of offspring_count
+        # Find the maximum offspring_count
         max_offspring = max(agent.offspring_count for agent in self.agents)
 
-        # Gather all agents with the maximum offspring_count
+        # Get all agents with the maximum offspring_count
         prolific_agents = [
             agent
             for agent in self.agents
             if agent.offspring_count == max_offspring
         ]
 
-        if len(prolific_agents) == 1:
-            return prolific_agents[0]
+        if prolific_agents:
+            # Sort agents by ID to find the oldest
+            prolific_agents.sort(key=lambda a: int(a.id.split("-")[1]))
+            oldest_agent = prolific_agents[0]
+            num_others = len(prolific_agents) - 1
+            return oldest_agent, num_others
         else:
-            # If there's a tie, you might want to handle it differently
-            # For now, return None to indicate no unique most prolific agent
-            logging.info(
-                f"Population {self.population_id} has multiple "
-                "agents with the highest offspring_count: "
-                f"{[agent.id for agent in prolific_agents]}"
-            )
             return None
 
     def get_seminal_agents(self):
@@ -3100,39 +3097,50 @@ class Population:
         logging.info(most_experienced_info)
 
         # 3. The Most Prolific Agent
-        most_prolific_agent = max(
-            self.agents, key=lambda a: a.offspring_count, default=None
-        )
-        prolific_count = 0
-        if most_prolific_agent and most_prolific_agent.offspring_count > 0:
-            # Log the genealogy count for the most prolific agent
-            prolific_count = self.genealogy_counts.get(
-                most_prolific_agent.id, 0
-            )
-            most_prolific_info = (
-                f"Most Prolific Agent in Population {self.population_id}: "
-                f"{most_prolific_agent.id} \n"
-                f"(Games Played: {most_prolific_agent.game_counter}) \n"
-                f"(Living Offspring: {most_prolific_agent.offspring_count}) \n"
-                f"(Genealogy Count: {prolific_count}) \n"
-                f"(Fitness: {most_prolific_agent.fitness})\n"
-            )
-            print(most_prolific_info)
-            logging.info(most_prolific_info)
+        most_prolific_agents = self.get_most_prolific_agent()
+
+        if most_prolific_agents:
+            if isinstance(most_prolific_agents, list):
+                # Sort agents by ID to find the oldest
+                sorted_agents = sorted(
+                    most_prolific_agents, key=lambda a: int(a.id.split("-")[1])
+                )
+                prolific_agent = sorted_agents[0]
+                num_other_agents = len(sorted_agents) - 1
+
+                prolific_info = (
+                    f"Most Prolific Agent in Population {self.population_id}: "
+                    f"{prolific_agent.id} "
+                    f"(Living Offspring: {prolific_agent.offspring_count})"
+                )
+                if num_other_agents > 0:
+                    prolific_info += f" (+ {num_other_agents} other agents)"
+
+                logging.info(prolific_info)
+                print(prolific_info)
+            else:
+                # Single most prolific agent
+                prolific_agent = most_prolific_agents
+                prolific_info = (
+                    f"Most Prolific Agent in Population {self.population_id}: "
+                    f"{prolific_agent.id} "
+                    f"(Living Offspring: {prolific_agent.offspring_count})"
+                )
+                logging.info(prolific_info)
+                print(prolific_info)
+        else:
+            logging.info("No Prolific Agents found.")
+            print("No Prolific Agents found.")
 
             # Additional Check
             # if prolific_count < int(self.size * 0.05):
             #    warning_info = (
             #        f"Warning: Most Prolific Agent {most_prolific_agent.id} "
             #        f"has genealogy count {prolific_count} "
-            #        "which is below the threshold."
+            #        "which is below the seminal agent threshold."
             #    )
             #    print(warning_info)
             #    logging.warning(warning_info)
-
-        else:
-            print("No Prolific Agents found.")
-            logging.info("No Prolific Agents found.")
 
         # 4. Seminal Agents
         seminal_agents = self.get_seminal_agents()
@@ -4371,8 +4379,6 @@ def main():
         print_strategy(
             meta_population.populations[0].agents[0].strategy.decision_tree
         )
-
-        # ... [Rest of your main function] ...
 
     except AttributeError as e:
         print(f"AttributeError encountered: {e}")
