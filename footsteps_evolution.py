@@ -2980,28 +2980,27 @@ class Population:
         Retrieves the agent(s) with the highest number of living offspring.
 
         Returns:
-            tuple: (oldest_agent, num_others)
+            Agent or list of Agents: The most prolific agent
+            if unique, else a list of agents.
         """
         if not self.agents:
             logging.warning(f"Population {self.population_id} has no agents.")
-            return None, 0
+            return None
 
-        # Find the maximum offspring_count
+        # Find the maximum number of offspring_count
         max_offspring = max(agent.offspring_count for agent in self.agents)
 
-        # Get all agents with the maximum offspring_count
+        # Gather all agents with the maximum offspring_count
         prolific_agents = [
             agent
             for agent in self.agents
             if agent.offspring_count == max_offspring
         ]
 
-        if prolific_agents:
-            # Sort agents by ID to find the oldest
-            prolific_agents.sort(key=lambda a: int(a.id.split("-")[1]))
-            oldest_agent = prolific_agents[0]
-            num_others = len(prolific_agents) - 1
-            return oldest_agent, num_others
+        if len(prolific_agents) == 1:
+            return prolific_agents[0]
+        elif len(prolific_agents) > 1:
+            return prolific_agents  # Return list of agents
         else:
             return None
 
@@ -3027,15 +3026,17 @@ class Population:
         # Ensure most prolific agent is included if they meet the threshold
         most_prolific_agent = self.get_most_prolific_agent()
         if most_prolific_agent:
-            prolific_count = self.genealogy_counts.get(
+            genealogy_count = self.genealogy_counts.get(
                 most_prolific_agent.id, 0
             )
             if (
-                prolific_count >= threshold
-                and (most_prolific_agent.id, prolific_count)
+                genealogy_count >= threshold
+                and (most_prolific_agent.id, genealogy_count)
                 not in seminal_agents
             ):
-                seminal_agents.append((most_prolific_agent.id, prolific_count))
+                seminal_agents.append(
+                    (most_prolific_agent.id, genealogy_count)
+                )
                 logging.info(
                     f"Most Prolific Agent {most_prolific_agent.id} "
                     "added to Seminal Agents."
@@ -3059,30 +3060,30 @@ class Population:
 
         # 1. The Oldest Remaining Agent
         oldest_agent = min(self.agents, key=lambda a: int(a.id.split("-")[1]))
-        prolific_count = 0
+        genealogy_count = 0
         if oldest_agent and oldest_agent.offspring_count > 0:
             # Log the genealogy count for the most experienced agent
-            prolific_count = self.genealogy_counts.get(oldest_agent.id, 0)
+            genealogy_count = self.genealogy_counts.get(oldest_agent.id, 0)
         oldest_agent_info = (
             f"Oldest Remaining Agent in Population {self.population_id}: "
             f"{oldest_agent.id} \n"
             f"(Games Played: {oldest_agent.game_counter}) \n"
             f"(Living Offspring: {oldest_agent.offspring_count}) \n"
-            f"(Genealogy Count: {prolific_count}) \n"
-            f"(Fitness: {oldest_agent.fitness})\n"
+            f"(Genealogy Count: {genealogy_count}) \n"
+            f"(Fitness: {oldest_agent.fitness}) \n"
         )
         print(oldest_agent_info)
         logging.info(oldest_agent_info)
 
         # 2. The Most Experienced Agent
         most_experienced_agent = max(self.agents, key=lambda a: a.game_counter)
-        prolific_count = 0
+        genealogy_count = 0
         if (
             most_experienced_agent
             and most_experienced_agent.offspring_count > 0
         ):
             # Log the genealogy count for the most experienced agent
-            prolific_count = self.genealogy_counts.get(
+            genealogy_count = self.genealogy_counts.get(
                 most_experienced_agent.id, 0
             )
         most_experienced_info = (
@@ -3090,8 +3091,8 @@ class Population:
             f"{most_experienced_agent.id} \n"
             f"(Games Played: {most_experienced_agent.game_counter}) \n"
             f"(Living Offspring: {most_experienced_agent.offspring_count}) \n"
-            f"(Genealogy Count: {prolific_count}) \n"
-            f"(Fitness: {most_experienced_agent.fitness})\n"
+            f"(Genealogy Count: {genealogy_count}) \n"
+            f"(Fitness: {most_experienced_agent.fitness}) \n"
         )
         print(most_experienced_info)
         logging.info(most_experienced_info)
@@ -3107,24 +3108,42 @@ class Population:
                 )
                 prolific_agent = sorted_agents[0]
                 num_other_agents = len(sorted_agents) - 1
-
+                # Log the genealogy count for the most experienced agent
+                genealogy_count = self.genealogy_counts.get(
+                    prolific_agent.id, 0
+                )
                 prolific_info = (
                     f"Most Prolific Agent in Population {self.population_id}: "
                     f"{prolific_agent.id} "
-                    f"(Living Offspring: {prolific_agent.offspring_count})"
                 )
                 if num_other_agents > 0:
                     prolific_info += f" (+ {num_other_agents} other agents)"
-
-                logging.info(prolific_info)
-                print(prolific_info)
+                    prolific_info += (
+                        f"(Games Played: {prolific_agent.game_counter}) \n"
+                        f"(Living Offspring: {prolific_agent.offspring_count})"
+                        f"\n(Genealogy Count: {genealogy_count}) \n"
+                        f"(Fitness: {prolific_agent.fitness}) \n"
+                    )
+                    logging.info(prolific_info)
+                    print(prolific_info)
             else:
                 # Single most prolific agent
                 prolific_agent = most_prolific_agents
+                # Log the genealogy count for the most experienced agent
+                genealogy_count = self.genealogy_counts.get(
+                    prolific_agent.id, 0
+                )
                 prolific_info = (
                     f"Most Prolific Agent in Population {self.population_id}: "
                     f"{prolific_agent.id} "
-                    f"(Living Offspring: {prolific_agent.offspring_count})"
+                )
+                prolific_info = (
+                    f"Most Prolific Agent in Population {self.population_id}: "
+                    f"{prolific_agent.id} "
+                    f"(Games Played: {prolific_agent.game_counter}) \n"
+                    f"(Living Offspring: {prolific_agent.offspring_count}) \n"
+                    f"(Genealogy Count: {genealogy_count}) \n"
+                    f"(Fitness: {prolific_agent.fitness}) \n"
                 )
                 logging.info(prolific_info)
                 print(prolific_info)
@@ -3133,10 +3152,10 @@ class Population:
             print("No Prolific Agents found.")
 
             # Additional Check
-            # if prolific_count < int(self.size * 0.05):
+            # if genealogy_count < int(self.size * 0.05):
             #    warning_info = (
             #        f"Warning: Most Prolific Agent {most_prolific_agent.id} "
-            #        f"has genealogy count {prolific_count} "
+            #        f"has genealogy count {genealogy_count} "
             #        "which is below the seminal agent threshold."
             #    )
             #    print(warning_info)
@@ -3182,10 +3201,10 @@ class Population:
 
         # 7. Most Fit Agent Change Logging
         unique_most_fit_agent = self.get_unique_most_fit_agent()
-        prolific_count = 0
+        genealogy_count = 0
         if unique_most_fit_agent and unique_most_fit_agent.offspring_count > 0:
             # Log the genealogy count for the most experienced agent
-            prolific_count = self.genealogy_counts.get(
+            genealogy_count = self.genealogy_counts.get(
                 unique_most_fit_agent.id, 0
             )
         if unique_most_fit_agent:
@@ -3222,18 +3241,18 @@ class Population:
                         f"with fitness {unique_most_fit_agent.fitness}\n(Games"
                         f"Played: {unique_most_fit_agent.game_counter}) \n"
                         f"(Offspring: {unique_most_fit_agent.offspring_count})"
-                        f"\n(Genealogy Count: {prolific_count}) \n"
-                        f"(Fitness: {unique_most_fit_agent.fitness})\n"
+                        f"\n(Genealogy Count: {genealogy_count}) \n"
+                        f"(Fitness: {unique_most_fit_agent.fitness}) \n"
                     )
                 print(change_info)
                 logging.info(change_info)
                 self.previous_most_fit_agent = unique_most_fit_agent
             else:
                 most_fit_agent = self.get_most_fit_agent()
-                prolific_count = 0
+                genealogy_count = 0
                 if most_fit_agent and most_fit_agent.offspring_count > 0:
                     # Log the genealogy count for the most experienced agent
-                    prolific_count = self.genealogy_counts.get(
+                    genealogy_count = self.genealogy_counts.get(
                         most_fit_agent.id, 0
                     )
                 if most_fit_agent:
@@ -3243,8 +3262,8 @@ class Population:
                         f"with fitness {most_fit_agent.fitness}.\n"
                         f"(Games Played: {most_fit_agent.game_counter}) \n"
                         f"(Living Offspring: {most_fit_agent.offspring_count})"
-                        f"\n(Genealogy Count: {prolific_count}) \n"
-                        f"(Fitness: {most_fit_agent.fitness})\n"
+                        f"\n(Genealogy Count: {genealogy_count}) \n"
+                        f"(Fitness: {most_fit_agent.fitness}) \n"
                     )
                     print(change_info)
                     logging.info(change_info)
@@ -3254,7 +3273,7 @@ class Population:
             logging.info("No unique most fit agent currently.")
             # Handle Tied Agents
             most_fit_agent = self.get_most_fit_agent()
-            prolific_count = 0
+            genealogy_count = 0
             top_fitness = most_fit_agent.fitness
             top_agents = [
                 agent for agent in self.agents if agent.fitness == top_fitness
@@ -3265,7 +3284,7 @@ class Population:
                 primary_agent = top_agents_sorted[0]
                 if primary_agent and primary_agent.offspring_count > 0:
                     # Log the genealogy count for the most experienced agent
-                    prolific_count = self.genealogy_counts.get(
+                    genealogy_count = self.genealogy_counts.get(
                         primary_agent.id, 0
                     )
                 tie_count = len(top_agents_sorted) - 1
@@ -3276,8 +3295,8 @@ class Population:
                     f"(+ {tie_count} others)\n"
                     f"(Games Played: {primary_agent.game_counter}) \n"
                     f"(Living Offspring: {primary_agent.offspring_count}) \n"
-                    f"(Genealogy Count: {prolific_count}) \n"
-                    f"(Fitness: {primary_agent.fitness})\n"
+                    f"(Genealogy Count: {genealogy_count}) \n"
+                    f"(Fitness: {primary_agent.fitness}) \n"
                 )
                 print(change_info)
                 logging.info(change_info)
