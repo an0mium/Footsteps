@@ -3023,26 +3023,47 @@ class Population:
             f"Identified Seminal Agents (Threshold: {threshold}):"
             f"{seminal_agents}"
         )
-        # Ensure most prolific agent is included if they meet the threshold
-        most_prolific_agent = self.get_most_prolific_agent()
-        if most_prolific_agent:
-            genealogy_count = self.genealogy_counts.get(
-                most_prolific_agent.id, 0
-            )
-            if (
-                genealogy_count >= threshold
-                and (most_prolific_agent.id, genealogy_count)
-                not in seminal_agents
-            ):
-                seminal_agents.append(
-                    (most_prolific_agent.id, genealogy_count)
+
+        # Ensure most prolific agent(s) are included if they meet the threshold
+        most_prolific_agents = self.get_most_prolific_agent()
+        if most_prolific_agents:
+            if isinstance(most_prolific_agents, list):
+                for prolific_agent in most_prolific_agents:
+                    prolific_count = self.genealogy_counts.get(
+                        prolific_agent.id, 0
+                    )
+                    if (
+                        prolific_count >= threshold
+                        and (prolific_agent.id, prolific_count)
+                        not in seminal_agents
+                    ):
+                        seminal_agents.append(
+                            (prolific_agent.id, prolific_count)
+                        )
+                        logging.info(
+                            f"Most Prolific Agent {prolific_agent.id} "
+                            f"added to Seminal Agents."
+                        )
+            else:
+                # Single most prolific agent
+                prolific_agent = most_prolific_agents
+                prolific_count = self.genealogy_counts.get(
+                    prolific_agent.id, 0
                 )
-                logging.info(
-                    f"Most Prolific Agent {most_prolific_agent.id} "
-                    "added to Seminal Agents."
-                )
+                if (
+                    prolific_count >= threshold
+                    and (prolific_agent.id, prolific_count)
+                    not in seminal_agents
+                ):
+                    seminal_agents.append((prolific_agent.id, prolific_count))
+                    logging.info(
+                        f"Most Prolific Agent {prolific_agent.id} "
+                        f"added to Seminal Agents."
+                    )
+
         for agent_id, count in seminal_agents:
             logging.info(f"Seminal Agent: {agent_id} in {count} genealogies.")
+
         return seminal_agents
 
     def report_population_status(self, game_number=None):
