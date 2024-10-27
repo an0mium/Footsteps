@@ -1044,7 +1044,7 @@ class Game:
         fitness_change = 0
         if player == self.winner:
             if self.outcome_code == "reached_goal":
-                fitness_change = 28
+                fitness_change = 18
             elif self.outcome_code == "proximity_tiebreak":
                 fitness_change = 3
             elif self.outcome_code in ["points_tiebreak", "random_tiebreak"]:
@@ -1054,13 +1054,13 @@ class Game:
             # Add other positive outcomes if any
         elif player == self.loser:
             if self.outcome_code == "ran_out_of_points":
-                fitness_change = -6 - player.fitness // 100
+                fitness_change = -6 - ((2 * player.fitness) // 100)
             elif self.outcome_code == "stayed_on_opponent_goal":
-                fitness_change = -28 - player.fitness // 100
+                fitness_change = -28 - ((2 * player.fitness) // 100)
             elif self.outcome_code == "invalid_move":
-                fitness_change = -28 - player.fitness // 100
+                fitness_change = -28 - ((2 * player.fitness) // 100)
             elif self.outcome_code != "error":
-                fitness_change = -3 - player.fitness // 100
+                fitness_change = -3 - ((2 * player.fitness) // 100)
             # Add other negative outcomes if any
         # fitness_change += 1
         return fitness_change
