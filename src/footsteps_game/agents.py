@@ -1,5 +1,6 @@
 """Agent class and related functionality"""
 
+import random
 import logging
 from dataclasses import dataclass
 from typing import Optional, Set, List

@@ -837,11 +837,6 @@ class StatsDisplay:
             finally:
                 self.is_updating = False
 
-    def _write_at(self, x, y, text):
-        """Write text at specified position with improved cursor handling"""
-        self.original_stdout.write(f"\033[{y+1};{x+1}H{text}")
-        # Don't flush here - let _update_section handle flushing
-
     def _redirect_output(self):
         """Redirect stdout to prevent scrolling"""
 
@@ -1240,7 +1235,10 @@ class StatsDisplay:
 
     def _get_bid_summary(self, strategy):
         """Get a brief summary of bidding parameters"""
-        return f"{strategy.bid_params['low_bid_range'][0]*100:.1f}% - {strategy.bid_params['high_bid_range'][1]*100:.1f}%"
+        return (
+            f"{strategy.bid_params['low_bid_range'][0]*100:.1f}%"
+            f"- {strategy.bid_params['high_bid_range'][1]*100:.1f}%"
+        )
 
 
 """Manages game visualization and statistics display"""
@@ -2488,6 +2486,7 @@ class Population:
                 agent1, agent2, game_type=game_type, meta_population=meta_population
             )
             winner = game.play()
+            winner = winner
 
             if self.meta_population:
                 self.meta_population._update_display()
@@ -2520,6 +2519,7 @@ class Population:
                 # Schedule and execute intrapopulation match
                 game = Game(elite_agent, opponent, game_type="intrapopulation_elite")
                 winner = game.play()
+                winner = winner
 
                 if self.meta_population:
                     self.meta_population._update_display()
@@ -2545,6 +2545,7 @@ class Population:
                                 self.meta_population._update_display()
 
                             inter_winner = inter_game.play()
+                            inter_winner = inter_winner
 
                             if self.meta_population:
                                 self.meta_population._update_display()
@@ -3227,6 +3228,7 @@ class MetaPopulation:
             # Play game
             game = Game(agent1, agent2, game_type=game_type, meta_population=self)
             winner = game.play()
+            winner = winner
             self._update_display()
 
             # Handle results

@@ -1,5 +1,8 @@
 """Utility functions for the Footsteps game."""
 
+# Add at top of src/footsteps_game/utils.py
+import time
+import msvcrt  # for Windows
 import logging
 from logging.handlers import RotatingFileHandler
 import platform

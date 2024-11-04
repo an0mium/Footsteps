@@ -1,5 +1,7 @@
 """Tests for the Strategy class"""
 
+# Add at top of test_strategy.py
+from copy import deepcopy
 import pytest
 from src.footsteps_game.strategy import Strategy
 
